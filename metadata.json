@@ -1,0 +1,6 @@
+{
+  "name": "SalesPulse",
+  "description": "Enterprise-grade Sales Dashboard and Analytics BI Platform. Features customer-wise sales forecasting based on funnel analysis, historical trends, and predictive business intelligence for upcoming months.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
