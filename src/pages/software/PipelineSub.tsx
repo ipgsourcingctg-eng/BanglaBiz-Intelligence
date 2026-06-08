@@ -67,9 +67,20 @@ export default function PipelineSub({ subscriptions, theme, onUpdateSubStage }: 
   };
 
   const formatBDT = (val: number) => {
-    if (val >= 10000000) return `৳ ${(val / 10000000).toFixed(2)} Cr`;
-    if (val >= 100000) return `৳ ${(val / 100000).toFixed(1)} L`;
-    return `৳ ${(val / 1000).toFixed(0)} K`;
+    let suffix = "";
+    let formattedVal = "";
+    if (val >= 10000000) {
+      suffix = " Cr";
+      formattedVal = (val / 10000000).toFixed(2);
+    } else if (val >= 100000) {
+      suffix = " L";
+      formattedVal = (val / 100000).toFixed(1);
+    } else {
+      formattedVal = (val / 1000).toFixed(0);
+      suffix = " K";
+    }
+
+    return `৳ ${formattedVal}${suffix}`;
   };
 
   return (

@@ -58,8 +58,36 @@ export default function Header({
   return (
     <header className={`sticky top-0 z-30 border-b flex p-3 md:p-4 items-center justify-between flex-wrap md:flex-nowrap ${theme.bgCard} ${theme.border} ${theme.cardShadow} gap-3 md:gap-4 relative`}>
       
-      {/* 1. App Logo & Name branding - Order 1 (Always Left) */}
-      <div className="flex items-center gap-2.5 shrink-0 order-1">
+      {/* 1. Global Search Input Bar (Left on Desktop) */}
+      <div className="w-full md:w-80 order-2 md:order-1 shrink-0 md:shrink">
+        <div className="relative group flex-1">
+          <Search size={15} className={`absolute left-3 top-2.5 ${theme.textMuted}`} />
+          <input
+            id="global-search-slicer"
+            type="text"
+            placeholder="Search buyer, order, brand, products..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={`w-full text-xs pl-9 pr-4 py-2 rounded-lg border focus:outline-none transition-all ${
+              theme.isDark 
+                ? "bg-slate-950/60 border-slate-800 text-slate-200 focus:border-amber-400 focus:ring-1 focus:ring-amber-400" 
+                : "bg-slate-100/60 border-slate-200 text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            }`}
+          />
+          {searchQuery && (
+            <button 
+              id="clear-search-btn"
+              onClick={() => setSearchQuery("")} 
+              className={`absolute right-3 top-1.5 text-xs text-slate-400 ${theme.isDark ? "hover:text-slate-100" : "hover:text-slate-900"}`}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 2. App Logo & Name branding (Centered on Desktop) */}
+      <div className="flex items-center gap-2.5 shrink-0 order-1 md:order-2 md:absolute md:left-1/2 md:-translate-x-1/2">
         {setCollapsed && (
           <button 
             className={`md:hidden p-1.5 rounded-md border transition ${theme.border} ${theme.textMuted}`}
@@ -72,18 +100,17 @@ export default function Header({
           <img src={appIcon} alt="SalesPulse" className="w-full h-full object-cover animate-fade-in" />
         </div>
         <div className="flex flex-col select-none">
-          <span className={`font-extrabold tracking-wider text-xs md:text-sm uppercase bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 bg-clip-text text-transparent font-sans`}>
+          <span className={`font-extrabold tracking-wider text-xs md:text-sm bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 bg-clip-text text-transparent font-sans`}>
             SalesPulse
           </span>
-          <span className="text-[7.5px] uppercase tracking-[0.15em] font-mono text-slate-450 dark:text-slate-500 leading-none font-bold mt-0.5">
+          <span className="text-[7.5px] uppercase tracking-[0.15em] font-mono text-slate-450 dark:text-slate-500 leading-none font-bold mt-0.5 whitespace-nowrap">
             Enterprise BI
           </span>
         </div>
       </div>
 
-      {/* 2. Controls & Theme Preset palette + Bell button - Order 2 on Mobile, Order 3 on Desktop */}
-      <div className="flex items-center gap-2.5 order-2 md:order-3 ml-auto md:ml-0 shrink-0">
-        
+      {/* 3. Controls & Theme Preset palette (Right on Desktop) */}
+      <div className="flex items-center gap-2.5 order-3 ml-auto shrink-0 relative z-10">
         {/* Sync Button */}
         {onRefresh && (
           <button
@@ -161,34 +188,6 @@ export default function Header({
                 ))}
               </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* 3. Global Search Input Bar - Order 3 on Mobile (wraps to line 2), Order 2 on Desktop (center) */}
-      <div className="w-full md:w-80 order-3 md:order-2 shrink-0 md:shrink">
-        <div className="relative group flex-1">
-          <Search size={15} className={`absolute left-3 top-2.5 ${theme.textMuted}`} />
-          <input
-            id="global-search-slicer"
-            type="text"
-            placeholder="Search buyer, order, brand, products..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full text-xs pl-9 pr-4 py-2 rounded-lg border focus:outline-none transition-all ${
-              theme.isDark 
-                ? "bg-slate-950/60 border-slate-800 text-slate-200 focus:border-amber-400 focus:ring-1 focus:ring-amber-400" 
-                : "bg-slate-100/60 border-slate-200 text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            }`}
-          />
-          {searchQuery && (
-            <button 
-              id="clear-search-btn"
-              onClick={() => setSearchQuery("")} 
-              className={`absolute right-3 top-1.5 text-xs text-slate-400 ${theme.isDark ? "hover:text-slate-100" : "hover:text-slate-900"}`}
-            >
-              ×
-            </button>
           )}
         </div>
       </div>

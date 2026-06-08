@@ -50,7 +50,6 @@ export default function Sidebar({
   
   const menuItems = [
     { id: "overview", label: "Dashboard Overview", icon: LayoutDashboard },
-    { id: "forecasting", label: "Sales Forecasting", icon: BrainCircuit },
     { id: "sales", label: "Sales Analytics", icon: TrendingUp },
     { id: "financials", label: "Finance & Collections", icon: Coins },
     { id: "kam_performance", label: "KAM Analytics", icon: UserCheck },
@@ -59,6 +58,7 @@ export default function Sidebar({
     { id: "products", label: "Product Analytics", icon: Package },
     { id: "lead_analysis", label: "Lead Analysis", icon: Activity },
     { id: "funnel", label: "Sales Funnel", icon: Filter },
+    { id: "forecasting", label: "Sales Forecasting", icon: BrainCircuit },
     { id: "software_business", label: "Software Business", icon: Briefcase },
     { id: "settings", label: "System Settings", icon: Settings }
   ];

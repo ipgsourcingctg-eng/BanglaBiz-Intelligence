@@ -45,9 +45,19 @@ export default function DashboardSub({ subscriptions, theme, onSetTab }: Dashboa
   const expiringSoonValue = expiring30.reduce((acc, s) => acc + s.total_value, 0);
 
   const formatBDT = (val: number) => {
-    if (val >= 10000000) return `৳ ${(val / 10000000).toFixed(2)} Crore`;
-    if (val >= 100000) return `৳ ${(val / 100000).toFixed(2)} Lakh`;
-    return `৳ ${val.toLocaleString()}`;
+    let suffix = "";
+    let formattedVal = "";
+    if (val >= 10000000) {
+      suffix = " Crore";
+      formattedVal = (val / 10000000).toFixed(2);
+    } else if (val >= 100000) {
+      suffix = " Lakh";
+      formattedVal = (val / 100000).toFixed(2);
+    } else {
+      formattedVal = val.toLocaleString();
+    }
+
+    return `৳ ${formattedVal}${suffix}`;
   };
 
   // Generate automated alerts

@@ -779,13 +779,14 @@ export default function App() {
           />
         );
       case "software_business":
-        return <SoftwareBusinessPage theme={theme} />;
+        return <SoftwareBusinessPage theme={theme} filters={filters} />;
       case "forecasting":
         return (
           <ForecastingPage 
             allRecords={allRecords} 
             funnelRecords={funnelRecords} 
             theme={theme} 
+            filters={filters}
           />
         );
       case "sales":
@@ -821,6 +822,7 @@ export default function App() {
             records={leadRecords}
             allRecords={allRecords}
             theme={theme}
+            globalFilters={filters}
             onUpdateRecords={(records) => {
               setLeadRecords(records);
               saveLocalLeadAnalysisRecords(records);

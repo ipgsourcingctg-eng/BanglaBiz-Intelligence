@@ -28,6 +28,7 @@ import ForecastSub from "./software/ForecastSub";
 
 interface SoftwareBusinessPageProps {
   theme: DashboardTheme;
+  filters?: any;
 }
 
 const MENU_TABS = [
@@ -43,7 +44,7 @@ const MENU_TABS = [
   { id: "import_export", label: "Import & Export", desc: "Batch loader & validation", icon: Upload },
 ];
 
-export default function SoftwareBusinessPage({ theme }: SoftwareBusinessPageProps) {
+export default function SoftwareBusinessPage({ theme, filters }: SoftwareBusinessPageProps) {
   const [activeSubTab, setActiveSubTab] = useState<string>("dashboard");
 
   // Databases States
@@ -69,6 +70,20 @@ export default function SoftwareBusinessPage({ theme }: SoftwareBusinessPageProp
       window.removeEventListener("salespulse_sw_subscriptions_updated", loadData);
     };
   }, []);
+
+  // Filter subscriptions based on global search query
+  const filteredSubscriptions = useMemo(() => {
+    const query = (filters?.searchQuery || "").toLowerCase();
+    if (!query) return subscriptions;
+
+    return subscriptions.filter(s => 
+      String(s.account_name || "").toLowerCase().includes(query) ||
+      String(s.brand_oem || "").toLowerCase().includes(query) ||
+      String(s.product_name || "").toLowerCase().includes(query) ||
+      String(s.local_vendor || "").toLowerCase().includes(query) ||
+      String(s.contract_no || "").toLowerCase().includes(query)
+    );
+  }, [subscriptions, filters?.searchQuery]);
 
   // Update databases helpers
   const handleSaveSubs = (newSubs: SoftwareSubscription[]) => {
@@ -123,9 +138,9 @@ export default function SoftwareBusinessPage({ theme }: SoftwareBusinessPageProp
 
   // Tab 3: RENEWAL TRACKER SPECIALISTS
   const renderTracker = () => {
-    const activeSubs = subscriptions.filter(s => s.status === "Active");
+    const activeSubs = filteredSubscriptions.filter(s => s.status === "Active");
     const categories = {
-      Expired: subscriptions.filter(s => getDaysRemaining(s.expires_on) < 0),
+      Expired: filteredSubscriptions.filter(s => getDaysRemaining(s.expires_on) < 0),
       Critical: activeSubs.filter(s => { const d = getDaysRemaining(s.expires_on); return d >= 0 && d <= 30; }),
       Attention: activeSubs.filter(s => { const d = getDaysRemaining(s.expires_on); return d >= 31 && d <= 60; }),
       Upcoming: activeSubs.filter(s => { const d = getDaysRemaining(s.expires_on); return d >= 61 && d <= 90; }),
@@ -210,10 +225,10 @@ export default function SoftwareBusinessPage({ theme }: SoftwareBusinessPageProp
   const [selectedCustomer, setSelectedCustomer] = useState<string>("");
   const renderInstalledBase = () => {
     // Unique list of customers
-    const customersList = Array.from(new Set(subscriptions.map(s => s.account_name)));
+    const customersList = Array.from(new Set(filteredSubscriptions.map(s => s.account_name)));
     const activeCust = selectedCustomer || customersList[0] || "";
 
-    const customerSubs = subscriptions.filter(s => s.account_name === activeCust);
+    const customerSubs = filteredSubscriptions.filter(s => s.account_name === activeCust);
     const activeValue = customerSubs.filter(s => s.status === "Active").reduce((acc, s) => acc + s.total_value, 0);
 
     return (
@@ -312,11 +327,11 @@ export default function SoftwareBusinessPage({ theme }: SoftwareBusinessPageProp
   // Tab 7: BRAND & VENDOR BUSINESS DECK
   const renderVendorBusiness = () => {
     // Unique list of vendors from subscriptions
-    const uniqueVendors = Array.from(new Set(subscriptions.map(s => s.local_vendor)));
+    const uniqueVendors = Array.from(new Set(filteredSubscriptions.map(s => s.local_vendor)));
     
     // Sort vendors by total contract value
     const vendorData = uniqueVendors.map(vendor => {
-      const vendorSubs = subscriptions.filter(s => s.local_vendor === vendor);
+      const vendorSubs = filteredSubscriptions.filter(s => s.local_vendor === vendor);
       const totalAmount = vendorSubs.reduce((sum, s) => sum + s.total_value, 0);
       const activeCount = vendorSubs.filter(s => s.status === "Active").length;
       const renewedCount = vendorSubs.filter(s => s.status === "Renewed" || s.renewal_stage === "Renewed").length;
@@ -1215,14 +1230,14 @@ export default function SoftwareBusinessPage({ theme }: SoftwareBusinessPageProp
       <div className="transition-all duration-300">
         {activeSubTab === "dashboard" && (
           <DashboardSub 
-            subscriptions={subscriptions} 
+            subscriptions={filteredSubscriptions} 
             theme={theme} 
             onSetTab={setActiveSubTab} 
           />
         )}
         {activeSubTab === "repository" && (
           <RepositorySub 
-            subscriptions={subscriptions} 
+            subscriptions={filteredSubscriptions} 
             theme={theme} 
             onAddSub={handleOpenAdd}
             onEditSub={handleOpenEdit}
@@ -1232,7 +1247,7 @@ export default function SoftwareBusinessPage({ theme }: SoftwareBusinessPageProp
         {activeSubTab === "tracker" && renderTracker()}
         {activeSubTab === "pipeline" && (
           <PipelineSub 
-            subscriptions={subscriptions} 
+            subscriptions={filteredSubscriptions} 
             theme={theme} 
             onUpdateSubStage={handleUpdateSubStage} 
           />
@@ -1241,7 +1256,7 @@ export default function SoftwareBusinessPage({ theme }: SoftwareBusinessPageProp
         {activeSubTab === "vendor_business" && renderVendorBusiness()}
         {activeSubTab === "forecast" && (
           <ForecastSub 
-            subscriptions={subscriptions} 
+            subscriptions={filteredSubscriptions} 
             theme={theme} 
           />
         )}

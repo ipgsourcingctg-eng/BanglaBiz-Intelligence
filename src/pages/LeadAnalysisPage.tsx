@@ -9,11 +9,17 @@ interface LeadAnalysisPageProps {
   records: LeadAnalysisRecord[];
   allRecords?: SalesRecord[];
   theme: DashboardTheme;
+  globalFilters?: any;
   onUpdateRecords?: (records: LeadAnalysisRecord[]) => void;
 }
 
-export default function LeadAnalysisPage({ records, allRecords = [], theme, onUpdateRecords }: LeadAnalysisPageProps) {
+export default function LeadAnalysisPage({ records, allRecords = [], theme, globalFilters, onUpdateRecords }: LeadAnalysisPageProps) {
   const [search, setSearch] = useState("");
+  
+  // Combine local search with global search query
+  const effectiveSearch = useMemo(() => {
+    return (globalFilters?.searchQuery || search).toLowerCase();
+  }, [globalFilters?.searchQuery, search]);
   
   // Real-Time Google Sheets Cloud Sync State and URL config
   const appsScriptUrl = useMemo(() => localStorage.getItem("googleAppsScriptUrl") || "", []);
@@ -320,7 +326,7 @@ export default function LeadAnalysisPage({ records, allRecords = [], theme, onUp
 
     const result = records.filter((r) => {
       // Global search
-      const qs = search.toLowerCase();
+      const qs = effectiveSearch;
       if (qs && !(
         (r["Leads Ref."] || "").toLowerCase().includes(qs) ||
         (r["Customer Name"] || "").toLowerCase().includes(qs) ||

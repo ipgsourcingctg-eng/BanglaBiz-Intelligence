@@ -11,7 +11,8 @@ import {
   Settings,
   FileCode,
   Briefcase,
-  Activity
+  Activity,
+  BrainCircuit
 } from "lucide-react";
 import { DashboardTheme } from "../types";
 
@@ -32,6 +33,7 @@ export default function MobileNav({ activeTab, setActiveTab, theme }: MobileNavP
     { id: "products", label: "Products", icon: Package },
     { id: "lead_analysis", label: "Leads", icon: Activity },
     { id: "funnel", label: "Funnel", icon: Filter },
+    { id: "forecasting", label: "Forecast", icon: BrainCircuit },
     { id: "software_business", label: "Software", icon: Briefcase },
     { id: "settings", label: "Settings", icon: Settings }
   ];

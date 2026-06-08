@@ -39,34 +39,56 @@ interface ForecastingPageProps {
   allRecords: SalesRecord[];
   funnelRecords: FunnelRecord[];
   theme: DashboardTheme;
+  filters?: any;
 }
 
-export default function ForecastingPage({ allRecords, funnelRecords, theme }: ForecastingPageProps) {
+export default function ForecastingPage({ allRecords, funnelRecords, theme, filters }: ForecastingPageProps) {
   const [loading, setLoading] = useState(false);
   const [forecast, setForecast] = useState<SalesForecastData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedKAM, setSelectedKAM] = useState<string>("All KAMs");
 
+  const searchQuery = (filters?.searchQuery || "").toLowerCase();
+
+  const baseFilteredSales = useMemo(() => {
+    if (!searchQuery) return allRecords;
+    return allRecords.filter(r => 
+      String(r.Buyer || "").toLowerCase().includes(searchQuery) ||
+      String(r.Product || "").toLowerCase().includes(searchQuery) ||
+      String(r.Brand || "").toLowerCase().includes(searchQuery) ||
+      String(r["Sales Person"] || "").toLowerCase().includes(searchQuery)
+    );
+  }, [allRecords, searchQuery]);
+
+  const baseFilteredFunnel = useMemo(() => {
+    if (!searchQuery) return funnelRecords;
+    return funnelRecords.filter(r => 
+      String(r.partner || "").toLowerCase().includes(searchQuery) ||
+      String(r.brand || "").toLowerCase().includes(searchQuery) ||
+      String(r.salesman || "").toLowerCase().includes(searchQuery)
+    );
+  }, [funnelRecords, searchQuery]);
+
   const kamList = useMemo(() => {
     const kams = new Set<string>();
-    allRecords.forEach(r => {
+    baseFilteredSales.forEach(r => {
       if (r["Sales Person"]) kams.add(r["Sales Person"]);
     });
-    funnelRecords.forEach(r => {
+    baseFilteredFunnel.forEach(r => {
       if (r.salesman) kams.add(r.salesman);
     });
     return ["All KAMs", ...Array.from(kams).sort()];
-  }, [allRecords, funnelRecords]);
+  }, [baseFilteredSales, baseFilteredFunnel]);
 
   const filteredAllRecords = useMemo(() => {
-    if (selectedKAM === "All KAMs") return allRecords;
-    return allRecords.filter(r => r["Sales Person"] === selectedKAM);
-  }, [allRecords, selectedKAM]);
+    if (selectedKAM === "All KAMs") return baseFilteredSales;
+    return baseFilteredSales.filter(r => r["Sales Person"] === selectedKAM);
+  }, [baseFilteredSales, selectedKAM]);
 
   const filteredFunnelRecords = useMemo(() => {
-    if (selectedKAM === "All KAMs") return funnelRecords;
-    return funnelRecords.filter(r => r.salesman === selectedKAM);
-  }, [funnelRecords, selectedKAM]);
+    if (selectedKAM === "All KAMs") return baseFilteredFunnel;
+    return baseFilteredFunnel.filter(r => r.salesman === selectedKAM);
+  }, [baseFilteredFunnel, selectedKAM]);
 
   const history = useMemo(() => {
     const map: Record<string, Record<string, number>> = {};
@@ -286,6 +308,15 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme }: Fo
                   tickLine={false}
                   axisLine={false}
                   dy={10}
+                  tickFormatter={(val) => {
+                    const parts = val.split("-");
+                    if (parts.length === 2) {
+                      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                      const mIdx = parseInt(parts[1], 10) - 1;
+                      return months[mIdx] || val;
+                    }
+                    return val;
+                  }}
                 />
                 <YAxis 
                   stroke="#94a3b8" 
@@ -298,6 +329,15 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme }: Fo
                   contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px" }}
                   labelStyle={{ color: "#fff", fontWeight: "bold", marginBottom: "4px" }}
                   itemStyle={{ color: "#fff" }}
+                  labelFormatter={(val) => {
+                    const parts = val.split("-");
+                    if (parts.length === 2) {
+                      const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                      const mIdx = parseInt(parts[1], 10) - 1;
+                      return `${months[mIdx] || parts[1]} ${parts[0]}`;
+                    }
+                    return val;
+                  }}
                   formatter={(value: any) => [formatBDT(value), "Predicted Revenue"]}
                 />
                 <Area 
