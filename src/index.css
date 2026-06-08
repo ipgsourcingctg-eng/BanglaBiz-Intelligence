@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@350;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+}
+
+/* Ensure native date picker icons are visible in dark mode */
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(0.8);
+}
+.dark input[type="month"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(0.8);
+}
+
+/* Ensure AI Strategic Briefings have excellent contrast and premium legibility on dark slate backgrounds */
+#gemini-insights-ul-output {
+  list-style-type: none !important;
+  padding-left: 0 !important;
+}
+
+#gemini-insights-ul-output li {
+  display: block !important;
+  color: #f1f5f9 !important; /* High-contrast text-slate-100/slate-200 */
+  padding: 0.75rem 0.875rem !important; /* Premium spacious padding */
+  border-left: 3px solid rgba(245, 158, 11, 0.7) !important; /* Vibrant golden-amber accent border */
+  background-color: rgba(245, 158, 11, 0.07) !important; /* Translucent ambient indicator bg */
+  border-radius: 0 0.875rem 0.875rem 0 !important;
+  margin-bottom: 0.875rem !important;
+  font-size: 0.75rem !important;
+  line-height: 1.5 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
+}
+
+#gemini-insights-ul-output li:nth-child(2) {
+  border-left-color: rgba(16, 185, 129, 0.7) !important; /* Vibrant emerald green accent border */
+  background-color: rgba(16, 185, 129, 0.07) !important; /* Translucent ambient indicator bg */
+}
+
+#gemini-insights-ul-output li:nth-child(3) {
+  border-left-color: rgba(14, 165, 233, 0.7) !important; /* Vibrant sky blue accent border */
+  background-color: rgba(14, 165, 233, 0.07) !important; /* Translucent ambient indicator bg */
+}
+
+#gemini-insights-ul-output li strong {
+  display: block;
+  font-weight: 700 !important;
+  font-size: 0.775rem !important;
+  margin-bottom: 0.175rem !important;
+  color: #fbbf24 !important; /* Warm glowing amber title font */
+  letter-spacing: 0.025em !important;
+}
+
+#gemini-insights-ul-output li:nth-child(2) strong {
+  color: #34d399 !important; /* Cool glowing emerald title font */
+}
+
+#gemini-insights-ul-output li:nth-child(3) strong {
+  color: #38bdf8 !important; /* Vibrant glowing sky blue title font */
+}
+
+#gemini-insights-ul-output li span,
+#gemini-insights-ul-output li code {
+  color: #f8fafc !important; /* Force high brightness key numbers inside body */
+  font-weight: 600 !important;
+}
+
