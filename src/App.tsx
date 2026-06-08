@@ -745,7 +745,7 @@ export default function App() {
     sales: "Sales Analytics",
     products: "Product Analytics",
     customers: "Customer Intelligence",
-    financials: "Finance & Collections",
+    financials: "Collections",
     pipeline: "Pipeline & Targets",
     kam_performance: "KAM Analytics",
     funnel: "Sales Funnel",

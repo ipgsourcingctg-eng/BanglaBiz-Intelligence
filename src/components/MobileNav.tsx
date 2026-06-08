@@ -26,7 +26,7 @@ export default function MobileNav({ activeTab, setActiveTab, theme }: MobileNavP
   const menuItems = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "sales", label: "Sales", icon: TrendingUp },
-    { id: "financials", label: "Accounts", icon: Coins },
+    { id: "financials", label: "Collections", icon: Coins },
     { id: "kam_performance", label: "KAMs", icon: UserCheck },
     { id: "pipeline", label: "Pipeline", icon: Target },
     { id: "customers", label: "Customers", icon: Users },

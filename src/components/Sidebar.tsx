@@ -51,7 +51,7 @@ export default function Sidebar({
   const menuItems = [
     { id: "overview", label: "Dashboard Overview", icon: LayoutDashboard },
     { id: "sales", label: "Sales Analytics", icon: TrendingUp },
-    { id: "financials", label: "Finance & Collections", icon: Coins },
+    { id: "financials", label: "Collections", icon: Coins },
     { id: "kam_performance", label: "KAM Analytics", icon: UserCheck },
     { id: "pipeline", label: "Pipeline & Targets", icon: Target },
     { id: "customers", label: "Customer Intelligence", icon: Users },

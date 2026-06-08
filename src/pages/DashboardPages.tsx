@@ -4052,7 +4052,7 @@ export function FinancialAnalyticsPage({
 
   return (
     <div className="space-y-6">
-      {/* Finance & Collections KPIs */}
+      {/* Collections KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
         <KpiCard
           title="Revenue Realization"
