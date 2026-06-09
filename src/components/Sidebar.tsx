@@ -26,6 +26,7 @@ import {
   BrainCircuit
 } from "lucide-react";
 import { User, DashboardTheme } from "../types";
+import { CachedImage } from "./CachedImage";
 const appIcon = "https://raw.githubusercontent.com/mahbubraju30-ctrl/logos-icons/main/SalesPulse.png";
 
 interface SidebarProps {
@@ -76,7 +77,7 @@ export default function Sidebar({
           {!collapsed && (
             <div className="flex items-center gap-2 overflow-hidden">
               <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-900 flex items-center justify-center font-bold text-white shadow-md select-none border border-slate-800 shrink-0">
-                <img src={appIcon} alt="SalesPulse" className="w-full h-full object-cover" />
+                <CachedImage src={appIcon} cacheKey="app_icon" alt="SalesPulse" className="w-full h-full object-cover" />
               </div>
               <div className="flex flex-col">
                 <span className={`font-bold tracking-tight text-sm ${theme.isDark ? "text-slate-100" : "text-slate-900"}`}>SalesPulse</span>
@@ -86,7 +87,7 @@ export default function Sidebar({
           )}
           {collapsed && (
             <div className="mx-auto w-8 h-8 rounded-lg overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center shadow-md select-none">
-              <img src={appIcon} alt="SP" className="w-full h-full object-cover" />
+              <CachedImage src={appIcon} cacheKey="app_icon" alt="SP" className="w-full h-full object-cover" />
             </div>
           )}
           

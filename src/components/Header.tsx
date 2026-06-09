@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { ThemeType, DashboardTheme, SyncLog } from "../types";
 import { CUSTOM_THEMES } from "../utils/theme";
+import { CachedImage } from "./CachedImage";
 const appIcon = "https://raw.githubusercontent.com/mahbubraju30-ctrl/logos-icons/main/SalesPulse.png";
 
 interface HeaderProps {
@@ -97,7 +98,7 @@ export default function Header({
           </button>
         )}
         <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-950 flex items-center justify-center border border-slate-200/40 dark:border-slate-800/50 shrink-0 shadow-sm">
-          <img src={appIcon} alt="SalesPulse" className="w-full h-full object-cover animate-fade-in" />
+          <CachedImage src={appIcon} cacheKey="app_icon" alt="SalesPulse" className="w-full h-full object-cover animate-fade-in" />
         </div>
         <div className="flex flex-col select-none">
           <span className={`font-extrabold tracking-wider text-xs md:text-sm bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 bg-clip-text text-transparent font-sans`}>

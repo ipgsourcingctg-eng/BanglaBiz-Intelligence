@@ -7,6 +7,8 @@ import React, { useState } from "react";
 import { Lock, User as UserIcon, AlertCircle, ShieldAlert } from "lucide-react";
 import { authenticateLocalUser } from "../db/localDb";
 import { User } from "../types";
+import { CachedImage } from "../components/CachedImage";
+
 const appIcon = "https://raw.githubusercontent.com/mahbubraju30-ctrl/logos-icons/main/SalesPulse.png";
 
 interface LoginProps {
@@ -49,7 +51,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         {/* Brand identity */}
         <div className="text-center mb-6">
           <div className="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg mb-3 overflow-hidden bg-slate-900 border border-slate-800">
-            <img src={appIcon} alt="SalesPulse Logo" className="w-full h-full object-cover" />
+            <CachedImage src={appIcon} cacheKey="app_icon" alt="SalesPulse Logo" className="w-full h-full object-cover" />
           </div>
           <h2 className="text-xl font-bold font-sans text-slate-100 tracking-tight">
             SalesPulse
