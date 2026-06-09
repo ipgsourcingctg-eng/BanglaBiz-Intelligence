@@ -28,6 +28,7 @@ interface KpiSectionProps {
   theme: DashboardTheme;
   filteredCollectionRecords?: CollectionRecord[];
   filters?: DashboardFilters;
+  onNavigate?: (tab: string) => void;
 }
 
 export default function KpiSection({ 
@@ -35,7 +36,8 @@ export default function KpiSection({
   allRecords, 
   theme,
   filteredCollectionRecords,
-  filters
+  filters,
+  onNavigate
 }: KpiSectionProps) {
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
 
@@ -87,35 +89,51 @@ export default function KpiSection({
   const totalQuantity = filteredRecords.reduce((sum, r) => sum + r.Quantity, 0);
   const avgOrderVal = orders > 0 ? Math.round(revenue / orders) : 0;
   const totalVatTax = filteredRecords.reduce((sum, r) => sum + r["Vat & Tax"], 0);
+  const totalVat = filteredRecords.reduce((sum, r) => sum + (r.Vat || 0), 0);
+  const totalTax = filteredRecords.reduce((sum, r) => sum + (r.Tax || 0), 0);
   const activeBuyers = new Set(filteredRecords.map(r => r.Buyer)).size;
 
   // Metric-specific trend generation
-  const getMetricSeries = (field: keyof SalesRecord | "orders" | "buyers" | "quantity"): number[] => {
-    const dateMap: Record<string, number> = {};
+  const getMetricSeries = (field: keyof SalesRecord | "orders" | "buyers" | "quantity" | "avg-order"): number[] => {
+    const dateMap: Record<string, any> = {};
     filteredRecords.forEach(r => {
       const dateVal = r["Invoice Date"] || r["Sales Date"] || "";
       if (!dateVal) return;
       
-      let val = 0;
-      if (field === "orders") {
-        val = 1; // Count of records as proxy for trend (approximate)
-      } else if (field === "buyers") {
-        val = 1; 
-      } else if (field === "quantity") {
-        val = r.Quantity || 0;
-      } else {
-        val = (r[field] as number) || 0;
+      if (!dateMap[dateVal]) {
+        dateMap[dateVal] = { sum: 0, count: 0, items: new Set(), qty: 0, vat: 0, net: 0, vat_only: 0, tax_only: 0 };
       }
       
-      dateMap[dateVal] = (dateMap[dateVal] || 0) + val;
+      const stats = dateMap[dateVal];
+      stats.sum += r["Total Price"] || 0;
+      stats.qty += r.Quantity || 0;
+      stats.vat += r["Vat & Tax"] || 0;
+      stats.vat_only += r.Vat || 0;
+      stats.tax_only += r.Tax || 0;
+      stats.net += r["Exclude Vat Tax"] || 0;
+      
+      if (r["Sales Order"]) stats.items.add(r["Sales Order"]);
+      if (r.Invoice) stats.count++; // Use as invoice count proxy
     });
 
     const sortedKeys = Object.keys(dateMap).sort();
-    // Use last 12 points for a smoother sparkline
-    const trend = sortedKeys.slice(-12).map(k => dateMap[k]);
+    const trend = sortedKeys.slice(-12).map(k => {
+      const d = dateMap[k];
+      switch(field) {
+        case "orders": return d.items.size;
+        case "buyers": return 1; // Keeping counting records as proxy for daily 'activity'
+        case "quantity": return d.qty;
+        case "avg-order": return d.items.size > 0 ? d.sum / d.items.size : 0;
+        case "Exclude Vat Tax": return d.net;
+        case "Vat": return d.vat_only;
+        case "Tax": return d.tax_only;
+        case "Vat & Tax": return d.vat;
+        case "Total Price": 
+        default: return d.sum;
+      }
+    });
     
     if (trend.length < 2) {
-      // Use zeros as a data-driven representation of 'no value' instead of random fallbacks
       return new Array(12).fill(0);
     }
     return trend;
@@ -149,6 +167,18 @@ export default function KpiSection({
 
   const kpis = [
     {
+      id: "national-target",
+      title: "Target",
+      value: formatBDT(nationalTarget, true, true),
+      sub: nationalTarget > 0 ? `${formatBDT(nationalTarget, false, true)} Goal` : "0 BDT Goal",
+      icon: <Target size={18} className="text-rose-400" />,
+      sparkColor: "#f43f5e",
+      sparkData: getMetricSeries("Total Price"), // Use revenue as proxy
+      tagline: `${new Date().getFullYear()} Quota Allocation`,
+      targetId: "target-performance-section",
+      tab: "pipeline"
+    },
+    {
       id: "gross-revenue",
       title: "Total Revenue",
       value: formatBDT(revenue, true, true),
@@ -159,7 +189,8 @@ export default function KpiSection({
       tagline: filteredRecords.length > 0 
         ? (revenue2025 > 0 ? `+${((revenue/revenue2025)*100).toFixed(0)}% vs 2025 Core` : "+14.2% QoQ")
         : "No records loaded",
-      targetId: "analytical-charts-suite"
+      targetId: "analytical-charts-suite",
+      tab: "sales"
     },
     {
       id: "net-distribution",
@@ -170,85 +201,21 @@ export default function KpiSection({
       sparkColor: "#10b981",
       sparkData: getMetricSeries("Exclude Vat Tax"),
       tagline: filteredRecords.length > 0 ? "+12.8% Cumulative" : "No active data",
-      targetId: "analytical-charts-suite"
-    },
-    {
-      id: "total-orders",
-      title: "Total Orders",
-      value: `${orders}`,
-      sub: `${orders} Purchase Orders`,
-      icon: <ShoppingCart size={18} className="text-sky-400" />,
-      sparkColor: "#0ea5e9",
-      sparkData: getMetricSeries("orders"),
-      tagline: filteredRecords.length > 0 ? "100% Digital Track" : "Empty ledger",
-      targetId: "audit-stream-section"
-    },
-    {
-      id: "total-invoices",
-      title: "Billed Invoices",
-      value: `${invoicesCount}`,
-      sub: `${pendingInvoices} Invoices Pending`,
-      icon: <FileText size={18} className="text-indigo-400" />,
-      sparkColor: "#6366f1",
-      sparkData: getMetricSeries("orders"), // Use order trend as proxy for invoicing
-      tagline: filteredRecords.length > 0 ? `${Math.min(100, Math.round((invoicesCount / (orders || 1)) * 100))}% Billing Ratio` : "Empty ledger",
-      targetId: "audit-stream-section"
-    },
-    {
-      id: "qty-sold",
-      title: "Total Assets Sold",
-      value: `${totalQuantity}`,
-      sub: "Asset Units Deployed",
-      icon: <Layers size={18} className="text-pink-400" />,
-      sparkColor: "#ec4899",
-      sparkData: getMetricSeries("quantity"),
-      tagline: filteredRecords.length > 0 ? "Corporate Hardware" : "No sold units",
-      targetId: "audit-stream-section"
-    },
-    {
-      id: "avg-order-val",
-      title: "Avg Deal Size",
-      value: formatBDT(avgOrderVal, true, true),
-      sub: `${formatBDT(avgOrderVal, false, true)} / Deal`,
-      icon: <Calculator size={18} className="text-teal-400" />,
-      sparkColor: "#14b8a6",
-      sparkData: getMetricSeries("Total Price"), // Use revenue trend
-      tagline: filteredRecords.length > 0 ? "Enterprise Grade" : "No active orders",
-      targetId: "audit-stream-section"
-    },
-    {
-      id: "total-vat-tax",
-      title: "Disbursed Vat & Tax",
-      value: formatBDT(totalVatTax, true, true),
-      sub: `${formatBDT(totalVatTax, false, true)} BDT`,
-      icon: <Activity size={18} className="text-orange-400" />,
-      sparkColor: "#f97316",
-      sparkData: getMetricSeries("Vat & Tax"),
-      tagline: filteredRecords.length > 0 ? `${vat}% Vat + ${tax}% AIT` : "0.0% standard",
-      targetId: "compliance-registry-section"
-    },
-    {
-      id: "active-buyers",
-      title: "Enterprise Buyers",
-      value: `${activeBuyers}`,
-      sub: "B2B Accounts Closed",
-      icon: <Users size={18} className="text-purple-400" />,
-      sparkColor: "#a855f7",
-      sparkData: getMetricSeries("buyers"),
-      tagline: filteredRecords.length > 0 ? "High repeat accounts" : "No buyer base",
-      targetId: "customer-insights-section"
+      targetId: "analytical-charts-suite",
+      tab: "sales"
     },
     {
       id: "target-achieved",
       title: "Target Achieved %",
       value: `${totalAchievementRate.toFixed(2).replace(/\.0+$/, "")}%`,
       sub: nationalTarget > 0 ? `Goal: ${formatBDT(nationalTarget, false, true)}` : "Goal: 0 BDT",
-      icon: <Target size={18} className="text-red-400" />,
-      sparkColor: "#f43f5e",
+      icon: <Target size={18} className="text-sky-400" />, // Changed color to sky for variety
+      sparkColor: "#0ea5e9",
       tagline: filteredRecords.length > 0 ? `${new Date().getFullYear()} Quota Status` : "No target defined",
       isProgress: true,
       pct: Math.min(100, totalAchievementRate),
-      targetId: "target-performance-section"
+      targetId: "target-performance-section",
+      tab: "pipeline"
     },
     {
       id: "sales-target-gap",
@@ -259,7 +226,116 @@ export default function KpiSection({
       sparkColor: "#737373",
       sparkData: getMetricSeries("Total Price").reverse(), // Use inverse revenue trend as proxy
       tagline: targetGap === 0 ? "Target Unlocked! 🎉" : (nationalTarget > 0 ? `${((targetGap/nationalTarget)*100).toFixed(0)}% Quota Gap` : "0% deficit"),
-      targetId: "target-performance-section"
+      targetId: "target-performance-section",
+      tab: "pipeline"
+    },
+    {
+      id: "monthly-run-rate",
+      title: "Target Run-rate / Mo.",
+      value: formatBDT(targetGap > 0 ? targetGap / (12 - new Date().getMonth()) : 0, true, true),
+      sub: `${12 - new Date().getMonth()} Months Remaining`,
+      icon: <Activity size={18} className="text-rose-400" />,
+      sparkColor: "#f43f5e",
+      sparkData: getMetricSeries("Total Price"),
+      tagline: targetGap > 0 ? "Monthly Recovery Goal" : "Quota Completed",
+      targetId: "target-performance-section",
+      tab: "pipeline"
+    },
+    {
+      id: "avg-order-val",
+      title: "Avg Deal Size",
+      value: formatBDT(avgOrderVal, true, true),
+      sub: `${formatBDT(avgOrderVal, false, true)} / Deal`,
+      icon: <Calculator size={18} className="text-teal-400" />,
+      sparkColor: "#14b8a6",
+      sparkData: getMetricSeries("avg-order"), 
+      tagline: filteredRecords.length > 0 ? "Enterprise Grade" : "No active orders",
+      targetId: "audit-stream-section",
+      tab: "sales"
+    },
+    {
+      id: "total-vat-tax",
+      title: "Disbursed Vat & Tax",
+      value: formatBDT(totalVatTax, true, true),
+      sub: `${formatBDT(totalVatTax, false, true)} BDT`,
+      icon: <Activity size={18} className="text-orange-400" />,
+      sparkColor: "#f97316",
+      sparkData: getMetricSeries("Vat & Tax"),
+      tagline: filteredRecords.length > 0 ? `${vat}% Vat + ${tax}% AIT` : "0.0% standard",
+      targetId: "compliance-registry-section",
+      tab: "financials"
+    },
+    {
+      id: "vat-amount",
+      title: "VAT Amount",
+      value: formatBDT(totalVat, true, true),
+      sub: `${formatBDT(totalVat, false, true)} BDT`,
+      icon: <Activity size={18} className="text-orange-300" />,
+      sparkColor: "#fdba74",
+      sparkData: getMetricSeries("Vat"),
+      tagline: filteredRecords.length > 0 ? `${vat}% Standard VAT` : "0% VAT",
+      targetId: "compliance-registry-section",
+      tab: "financials"
+    },
+    {
+      id: "tax-amount",
+      title: "Tax Amount",
+      value: formatBDT(totalTax, true, true),
+      sub: `${formatBDT(totalTax, false, true)} BDT`,
+      icon: <Activity size={18} className="text-orange-500" />,
+      sparkColor: "#f97316",
+      sparkData: getMetricSeries("Tax"),
+      tagline: filteredRecords.length > 0 ? `${tax}% Withholding Tax` : "0% Tax",
+      targetId: "compliance-registry-section",
+      tab: "financials"
+    },
+    {
+      id: "active-buyers",
+      title: "Enterprise Buyers",
+      value: `${activeBuyers}`,
+      sub: "B2B Accounts Closed",
+      icon: <Users size={18} className="text-purple-400" />,
+      sparkColor: "#a855f7",
+      sparkData: getMetricSeries("buyers"),
+      tagline: filteredRecords.length > 0 ? "High repeat accounts" : "No buyer base",
+      targetId: "customer-insights-section",
+      tab: "customers"
+    },
+    {
+      id: "total-orders",
+      title: "Total Orders",
+      value: `${orders}`,
+      sub: `${orders} Purchase Orders`,
+      icon: <ShoppingCart size={18} className="text-sky-400" />,
+      sparkColor: "#0ea5e9",
+      sparkData: getMetricSeries("orders"),
+      tagline: filteredRecords.length > 0 ? "100% Digital Track" : "Empty ledger",
+      targetId: "audit-stream-section",
+      tab: "sales"
+    },
+    {
+      id: "total-invoices",
+      title: "Billed Invoices",
+      value: `${invoicesCount}`,
+      sub: `${pendingInvoices} Invoices Pending`,
+      icon: <FileText size={18} className="text-indigo-400" />,
+      sparkColor: "#6366f1",
+      sparkData: getMetricSeries("orders"), // Use order trend as proxy for invoicing
+      tagline: filteredRecords.length > 0 ? `${Math.min(100, Math.round((invoicesCount / (orders || 1)) * 100))}% Billing Ratio` : "Empty ledger",
+      targetId: "audit-stream-section",
+      tab: "financials"
+    },
+    {
+      id: "qty-sold",
+      title: "Total Assets Sold",
+      value: `${totalQuantity}`,
+      sub: "Asset Units Deployed",
+      icon: <Layers size={18} className="text-pink-400" />,
+      sparkColor: "#ec4899",
+      sparkData: getMetricSeries("quantity"),
+      tagline: filteredRecords.length > 0 ? "Corporate Hardware" : "No sold units",
+      targetId: "audit-stream-section",
+      tab: "products"
     },
     {
       id: "pipeline-commit",
@@ -270,7 +346,8 @@ export default function KpiSection({
       sparkColor: "#e11d48",
       sparkData: getMetricSeries("Total Price"), // Use revenue trend as proxy
       tagline: filteredRecords.length > 0 ? "96% Probable Win" : "Pipeline empty",
-      targetId: "analytical-charts-suite"
+      targetId: "analytical-charts-suite",
+      tab: "funnel"
     }
   ];
 
@@ -287,8 +364,14 @@ export default function KpiSection({
           id={`kpi-indicator-card-${kpi.id}`}
           key={kpi.id} 
           onClick={() => {
-            const el = document.getElementById((kpi as any).targetId);
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
+            if (onNavigate && kpi.tab) {
+              onNavigate(kpi.tab);
+              // Scroll to top of body when switching tabs
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+              const el = document.getElementById((kpi as any).targetId);
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }
           }}
           className={`p-4 min-h-[146px] rounded-2xl border flex flex-col justify-between transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden group cursor-pointer ${theme.bgCard} ${theme.border} ${theme.cardShadow} hover:border-amber-400/30 hover:shadow-xl active:scale-95`}
         >

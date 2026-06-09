@@ -4494,6 +4494,49 @@ export function FinancialAnalyticsPage({
                   );
                 })}
               </tbody>
+              <tfoot className="border-t-2 border-slate-700 bg-slate-900/60 font-bold sticky bottom-0 z-10">
+                <tr>
+                  {isCollColVisible("buyer") && (
+                    <td className="py-3 px-2 text-slate-100 uppercase text-[10px] font-mono">
+                      Grand Totals ({velocityData.length} Buyers)
+                    </td>
+                  )}
+                  {isCollColVisible("invoiced") && (
+                    <td className="py-3 text-right font-mono text-slate-100">
+                      {formatBDT(velocityData.reduce((s, d) => s + d.totalRevenue, 0), true, true)}
+                    </td>
+                  )}
+                  {isCollColVisible("collected") && (
+                    <td className="py-3 text-right font-mono text-emerald-400">
+                      {formatBDT(velocityData.reduce((s, d) => s + d.totalCollected, 0), true, true)}
+                    </td>
+                  )}
+                  {isCollColVisible("outstanding") && (
+                    <td className="py-3 text-right font-mono text-rose-400">
+                      {formatBDT(velocityData.reduce((s, d) => s + Math.max(0, d.totalRevenue - d.totalCollected), 0), true, true)}
+                    </td>
+                  )}
+                  {isCollColVisible("velocity") && (
+                    <td className="py-3 text-right font-mono text-slate-100">
+                      {Math.round(velocityData.reduce((s, d) => s + d.avgDays, 0) / (velocityData.length || 1))}
+                    </td>
+                  )}
+                  {isCollColVisible("rate") && (
+                    <td className="py-3 text-center font-mono text-amber-400">
+                      {(() => {
+                        const rev = velocityData.reduce((s, d) => s + d.totalRevenue, 0);
+                        const col = velocityData.reduce((s, d) => s + d.totalCollected, 0);
+                        return rev > 0 ? ((col / rev) * 100).toFixed(1) : "0.0";
+                      })()}%
+                    </td>
+                  )}
+                  {isCollColVisible("contribution") && (
+                    <td className="py-3 text-center font-mono text-indigo-400">
+                      100.0%
+                    </td>
+                  )}
+                </tr>
+              </tfoot>
             </table>
           </div>
       </div>

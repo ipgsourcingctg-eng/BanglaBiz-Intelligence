@@ -948,6 +948,7 @@ export default function App() {
                       theme={theme}
                       filteredCollectionRecords={filteredCollectionRecords}
                       filters={filters}
+                      onNavigate={setActiveTab}
                     />
                   </div>
                 )}
