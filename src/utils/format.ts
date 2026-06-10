@@ -155,3 +155,27 @@ export function normalizeName(name: string): string {
     .replace(/[^a-z0-9]/gi, "")
     .trim();
 }
+
+/**
+ * Determines the Fiscal Year (July-June) for a given date.
+ */
+export function getFiscalYear(dateStr: string | undefined): string {
+  if (!dateStr) return "N/A";
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return "N/A";
+    
+    const month = date.getMonth(); // 0-11 (Jan is 0, July is 6)
+    const year = date.getFullYear();
+    
+    if (month >= 6) { // July (6) to Dec (11)
+      const nextYearTwoDigits = (year + 1).toString().slice(-2);
+      return `FY: ${year}-${nextYearTwoDigits}`;
+    } else { // Jan (0) to June (5)
+      const yearTwoDigits = year.toString().slice(-2);
+      return `FY: ${year - 1}-${yearTwoDigits}`;
+    }
+  } catch {
+    return "N/A";
+  }
+}

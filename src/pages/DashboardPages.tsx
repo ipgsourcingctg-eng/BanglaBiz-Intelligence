@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
 import {
   BarChart,
@@ -68,7 +68,7 @@ import {
   FunnelRecord,
 } from "../types";
 import Filters from "../components/Filters";
-import { formatBDT, formatDate, normalizeName } from "../utils/format";
+import { formatBDT, formatDate, normalizeName, getFiscalYear } from "../utils/format";
 import {
   exportDashboardToPdf,
   exportDashboardToSlides,
@@ -3991,6 +3991,42 @@ export function FinancialAnalyticsPage({
   );
   const treasuryYield = totalVatValue + totalTaxValue;
 
+  const availableFYs = useMemo(() => {
+    const fys = new Set<string>();
+    allRecords.forEach(r => {
+      const fy = getFiscalYear(r["Invoice Date"] || r["Sales Date"]);
+      if (fy !== "N/A") fys.add(fy);
+    });
+    return Array.from(fys).sort().reverse();
+  }, [allRecords]);
+
+  const currentFY = getFiscalYear(new Date().toISOString().split('T')[0]);
+  const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(() => {
+    if (availableFYs.includes(currentFY)) return currentFY;
+    return availableFYs[0] || "All";
+  });
+
+  const buyerVatTaxSummary = useMemo(() => {
+    const summary: Record<string, { vat: number; tax: number; total: number }> = {};
+    const baseRecords = selectedFiscalYear === "All"
+      ? filteredRecords
+      : filteredRecords.filter(r => getFiscalYear(r["Invoice Date"] || r["Sales Date"]) === selectedFiscalYear);
+
+    baseRecords.forEach(r => {
+      if (!r.Buyer) return;
+      if (!summary[r.Buyer]) {
+        summary[r.Buyer] = { vat: 0, tax: 0, total: 0 };
+      }
+      summary[r.Buyer].vat += (r.Vat || 0);
+      summary[r.Buyer].tax += (r.Tax || 0);
+      summary[r.Buyer].total += (r["Vat & Tax"] || 0);
+    });
+    return Object.entries(summary)
+      .map(([name, data]) => ({ name, ...data }))
+      .filter(item => item.total > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [filteredRecords, selectedFiscalYear]);
+
   const CustomCollectionTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
@@ -4539,6 +4575,118 @@ export function FinancialAnalyticsPage({
               </tfoot>
             </table>
           </div>
+      </div>
+
+      {/* Buyer-Wise VAT & Tax Summary */}
+      <div className={`p-5 rounded-2xl border ${theme.bgCard} ${theme.border} ${theme.cardShadow}`}>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-800 pb-4 mb-5 gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-amber-500/10 rounded-xl border border-amber-500/20 text-amber-400 shrink-0">
+              <ShieldCheck size={15} />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-bold text-xs uppercase tracking-wider text-slate-200">
+                Buyer-Wise VAT & Tax Summary
+              </span>
+              <span className="font-mono text-[9px] text-[#94A3B8] mt-0.5">
+                Statutory VAT & AIT Breakdown by Account
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 md:justify-end w-full md:w-auto shrink-0">
+            <div className="flex items-center gap-2 bg-slate-900/50 p-1 px-2 rounded-lg border border-slate-700">
+              <Calendar size={13} className="text-slate-400" />
+              <select
+                value={selectedFiscalYear}
+                onChange={(e) => setSelectedFiscalYear(e.target.value)}
+                className="bg-transparent text-[10px] text-slate-200 outline-none border-none cursor-pointer font-mono font-bold"
+              >
+                <option value="All" className="bg-slate-900">All FY</option>
+                {availableFYs.map(fy => (
+                  <option key={fy} value={fy} className="bg-slate-900">{fy}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={() => {
+                const totalVat = buyerVatTaxSummary.reduce((s, d) => s + d.vat, 0);
+                const totalTax = buyerVatTaxSummary.reduce((s, d) => s + d.tax, 0);
+                const totalSum = buyerVatTaxSummary.reduce((s, d) => s + d.total, 0);
+                
+                const exportData = [
+                  ...buyerVatTaxSummary.map((d, idx) => ({
+                    Rank: idx + 1,
+                    "Buyer Name": d.name,
+                    "VAT (BDT)": d.vat,
+                    "Tax (BDT)": d.tax,
+                    "Total VAT & Tax (BDT)": d.total
+                  })),
+                  {
+                    Rank: "",
+                    "Buyer Name": "GRAND TOTAL",
+                    "VAT (BDT)": totalVat,
+                    "Tax (BDT)": totalTax,
+                    "Total VAT & Tax (BDT)": totalSum
+                  }
+                ];
+                exportToExcel(exportData, `Buyer_VAT_Tax_Summary_${selectedFiscalYear}`);
+              }}
+              className="px-2.5 py-1 text-[10px] bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg border border-emerald-500/20 transition-all flex items-center gap-1 cursor-pointer uppercase font-mono font-bold"
+              title="Export to Excel"
+            >
+              <FileSpreadsheet size={13} />
+              Export to Excel
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto max-h-96">
+          <table className="w-full text-left">
+            <thead className="sticky top-0 bg-[#0f172a] z-10 border-b border-slate-800">
+              <tr className="text-[10px] uppercase font-mono text-slate-500">
+                <th className="pb-3 px-2">Buyer Name</th>
+                <th className="pb-3 text-right text-amber-500">VAT (BDT)</th>
+                <th className="pb-3 text-right text-emerald-500">Tax (BDT)</th>
+                <th className="pb-3 text-right pr-6">Total VAT & Tax (BDT)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/50 text-xs text-slate-300">
+              {buyerVatTaxSummary.map((d) => (
+                <tr key={d.name} className="hover:bg-white/5 transition">
+                  <td className="py-3 px-2 font-semibold text-slate-200">
+                    {d.name}
+                  </td>
+                  <td className="py-3 text-right font-mono text-amber-500">
+                    {formatBDT(d.vat, true, true)}
+                  </td>
+                  <td className="py-3 text-right font-mono text-emerald-500">
+                    {formatBDT(d.tax, true, true)}
+                  </td>
+                  <td className="py-3 text-right font-mono font-bold pr-6">
+                    {formatBDT(d.total, true, true)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="border-t-2 border-slate-700 bg-slate-900/60 font-bold sticky bottom-0 z-10">
+              <tr>
+                <td className="py-3 px-2 text-slate-100 uppercase text-[10px] font-mono">
+                  Grand Totals ({buyerVatTaxSummary.length} Buyers)
+                </td>
+                <td className="py-3 text-right font-mono text-amber-500">
+                  {formatBDT(buyerVatTaxSummary.reduce((s, d) => s + d.vat, 0), true, true)}
+                </td>
+                <td className="py-3 text-right font-mono text-emerald-500">
+                  {formatBDT(buyerVatTaxSummary.reduce((s, d) => s + d.tax, 0), true, true)}
+                </td>
+                <td className="py-3 text-right font-mono text-white pr-6">
+                  {formatBDT(buyerVatTaxSummary.reduce((s, d) => s + d.total, 0), true, true)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
     </div>
   );
