@@ -75,6 +75,7 @@ export interface SyncLog {
 
 export interface DashboardFilters {
   dateRange: [string, string]; // [YYYY-MM-DD, YYYY-MM-DD]
+  years?: number[];
   branch: string[];
   salesPerson: string[];
   buyerGroup: string[];

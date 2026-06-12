@@ -270,51 +270,67 @@ export default function Filters({
     return list;
   }, [salesYears]);
 
-  const currentSelectedYear = filters.dateRange[0] === '1990-01-01' ? 'all' : new Date(filters.dateRange[0]).getFullYear();
+  const currentSelectedYears = filters.years || [];
 
   const currentQuarterValue = React.useMemo(() => {
     const [currStart, currEnd] = filters.dateRange;
     if (
-      (currentSelectedYear === 'all' && currStart === '1990-01-01' && currEnd === '2100-12-31') ||
-      (currentSelectedYear !== 'all' && currStart === `${currentSelectedYear}-01-01` && currEnd === `${currentSelectedYear}-12-31`)
+      (currentSelectedYears.length === 0 && currStart === '1990-01-01' && currEnd === '2100-12-31') ||
+      (currentSelectedYears.length === 1 && currStart === `${currentSelectedYears[0]}-01-01` && currEnd === `${currentSelectedYears[0]}-12-31`)
     ) {
       return "all";
     }
     const matched = allQuarters.find(q => q.startDate === currStart && q.endDate === currEnd);
     return matched ? matched.value : "custom";
-  }, [filters.dateRange, allQuarters, currentSelectedYear]);
+  }, [filters.dateRange, allQuarters, currentSelectedYears]);
 
   const displayedQuarters = React.useMemo(() => {
-    if (currentSelectedYear === 'all') {
+    if (currentSelectedYears.length !== 1) {
       return allQuarters;
     }
-    const yearStr = String(currentSelectedYear).substring(2); // e.g. "26" for 2026
+    const yearStr = String(currentSelectedYears[0]).substring(2); // e.g. "26" for 2026
     return allQuarters.filter(q => q.label.endsWith(`FY${yearStr}`));
-  }, [allQuarters, currentSelectedYear]);
+  }, [allQuarters, currentSelectedYears]);
 
-  const handleYearChange = (newYear: number | 'all') => {
-    if (newYear === 'all') {
-      setFilters(prev => ({
-        ...prev,
-        dateRange: ['1990-01-01', '2100-12-31']
-      }));
-    } else {
-      setFilters(prev => ({
-        ...prev,
-        dateRange: [`${newYear}-01-01`, `${newYear}-12-31`]
-      }));
-    }
+  const handleYearToggle = (year: number) => {
+    setFilters(prev => {
+      const current = prev.years || [];
+      const updated = current.includes(year)
+        ? current.filter(y => y !== year)
+        : [...current, year];
+      
+      // If we only have ONE year selected, update dateRange to cover that year
+      // If zero or multiple, we usually leave dateRange at broad settings or let user choose quarters
+      let newDateRange = prev.dateRange;
+      if (updated.length === 1) {
+        newDateRange = [`${updated[0]}-01-01`, `${updated[0]}-12-31`];
+      } else if (updated.length === 0) {
+        newDateRange = ['1990-01-01', '2100-12-31'];
+      }
+
+      return { ...prev, years: updated, dateRange: newDateRange };
+    });
   };
 
   const navigateYear = (direction: 'next' | 'prev') => {
-    if (currentSelectedYear === 'all') return;
+    if (currentSelectedYears.length !== 1) return;
     const sortedYears = [...salesYears].sort((a,b) => a - b);
-    const currentIndex = sortedYears.indexOf(Number(currentSelectedYear));
+    const currentIndex = sortedYears.indexOf(Number(currentSelectedYears[0]));
     
     if (direction === 'prev' && currentIndex > 0) {
-      handleYearChange(sortedYears[currentIndex - 1]);
+      const newYear = sortedYears[currentIndex - 1];
+      setFilters(prev => ({
+        ...prev,
+        years: [newYear],
+        dateRange: [`${newYear}-01-01`, `${newYear}-12-31`]
+      }));
     } else if (direction === 'next' && currentIndex < sortedYears.length - 1) {
-      handleYearChange(sortedYears[currentIndex + 1]);
+      const newYear = sortedYears[currentIndex + 1];
+      setFilters(prev => ({
+        ...prev,
+        years: [newYear],
+        dateRange: [`${newYear}-01-01`, `${newYear}-12-31`]
+      }));
     }
   };
 
@@ -343,9 +359,10 @@ export default function Filters({
   };
 
   const resetAllFilters = () => {
-    const runningYear = new Date().getFullYear().toString();
+    const runningYear = new Date().getFullYear();
     setFilters({
       dateRange: [`${runningYear}-01-01`, `${runningYear}-12-31`],
+      years: [runningYear],
       branch: [],
       salesPerson: [],
       buyerGroup: [],
@@ -542,33 +559,71 @@ export default function Filters({
         
         {/* Date picking section inline */}
         <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
-          <div className={`flex items-center justify-between sm:justify-start gap-1.5 px-3 py-2 sm:px-2 sm:py-1.5 rounded-lg border text-[12px] sm:text-[11px] font-mono shadow-sm ${theme.isDark ? "bg-[#09090b] border-zinc-800" : "bg-white border-slate-300 text-slate-850"}`}>
-            <button 
-              onClick={() => navigateYear('prev')}
-              className={`p-1.5 sm:p-1 rounded transition text-slate-500 hover:text-slate-800 ${theme.isDark ? "hover:bg-slate-800 hover:text-white" : "hover:bg-slate-100"}`}
-              title="Previous Year"
-            >
-              <ChevronLeft size={16} className="sm:w-3.5 sm:h-3.5" />
-            </button>
-            
-            <select 
-              value={currentSelectedYear}
-              onChange={(e) => handleYearChange(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
-              className={`bg-transparent border-none text-[12px] sm:text-[11px] focus:ring-0 cursor-pointer font-bold outline-none font-mono ${theme.isDark ? "text-slate-200" : "text-slate-800"}`}
-            >
-              <option value="all" className={theme.isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>All Years</option>
-              {salesYears.map(y => (
-                <option key={y} value={y} className={theme.isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>{y} Sales Year</option>
-              ))}
-            </select>
+          <div className="relative">
+            <div className={`flex items-center justify-between sm:justify-start gap-1.5 px-3 py-2 sm:px-2 sm:py-1.5 rounded-lg border text-[12px] sm:text-[11px] font-mono shadow-sm ${theme.isDark ? "bg-[#09090b] border-zinc-800" : "bg-white border-slate-300 text-slate-850"}`}>
+              <button 
+                onClick={() => navigateYear('prev')}
+                className={`p-1.5 sm:p-1 rounded transition text-slate-500 hover:text-slate-800 ${theme.isDark ? "hover:bg-slate-800 hover:text-white" : "hover:bg-slate-100"} ${currentSelectedYears.length !== 1 ? 'opacity-30 cursor-not-allowed' : ''}`}
+                title="Previous Year"
+                disabled={currentSelectedYears.length !== 1}
+              >
+                <ChevronLeft size={16} className="sm:w-3.5 sm:h-3.5" />
+              </button>
+              
+              <button
+                onClick={() => toggleSection('year_selector')}
+                className={`px-2 flex items-center gap-2 text-[12px] sm:text-[11px] font-bold outline-none font-mono ${theme.isDark ? "text-slate-200" : "text-slate-800"}`}
+              >
+                {currentSelectedYears.length === 0 ? "Select Years" : 
+                 currentSelectedYears.length === salesYears.length ? "All Years" :
+                 currentSelectedYears.length === 1 ? currentSelectedYears[0] : `${currentSelectedYears.length} Years`}
+                <ChevronDown size={12} className="opacity-60" />
+              </button>
 
-            <button 
-              onClick={() => navigateYear('next')}
-              className={`p-1.5 sm:p-1 rounded transition text-slate-500 hover:text-slate-800 ${theme.isDark ? "hover:bg-slate-800 hover:text-white" : "hover:bg-slate-100"}`}
-              title="Next Year"
-            >
-              <ChevronRight size={16} className="sm:w-3.5 sm:h-3.5" />
-            </button>
+              <button 
+                onClick={() => navigateYear('next')}
+                className={`p-1.5 sm:p-1 rounded transition text-slate-500 hover:text-slate-800 ${theme.isDark ? "hover:bg-slate-800 hover:text-white" : "hover:bg-slate-100"} ${currentSelectedYears.length !== 1 ? 'opacity-30 cursor-not-allowed' : ''}`}
+                title="Next Year"
+                disabled={currentSelectedYears.length !== 1}
+              >
+                <ChevronRight size={16} className="sm:w-3.5 sm:h-3.5" />
+              </button>
+            </div>
+
+            {openSection === 'year_selector' && (
+              <div className={`absolute top-[calc(100%+6px)] left-0 mt-0 w-48 p-3 ${theme.bgCard} border ${theme.border} rounded-xl shadow-xl z-50 flex flex-col select-none animate-fade-in`}>
+                <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-800/40 text-[10px]">
+                  <button 
+                    onClick={() => setFilters(prev => ({ ...prev, years: [...salesYears], dateRange: ['1990-01-01', '2100-12-31'] }))}
+                    className="text-indigo-400 font-bold uppercase"
+                  >
+                    Select All
+                  </button>
+                  <button 
+                    onClick={() => setFilters(prev => ({ ...prev, years: [], dateRange: ['1990-01-01', '2100-12-31'] }))}
+                    className="text-amber-500 font-bold uppercase"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="space-y-1 overflow-y-auto max-h-48">
+                  {salesYears.map(y => {
+                    const isChecked = currentSelectedYears.includes(y);
+                    return (
+                      <label key={y} className={`flex items-center gap-2 p-2 rounded cursor-pointer text-xs transition ${isChecked ? 'bg-indigo-500/10 text-indigo-400 font-bold' : 'text-slate-400 hover:bg-slate-800/50'}`}>
+                        <input 
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleYearToggle(y)}
+                          className="rounded w-3.5 h-3.5 border-slate-700 bg-slate-900 text-indigo-500 focus:ring-0"
+                        />
+                        {y} Sales Year
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className={`flex items-center justify-between sm:justify-start gap-1.5 px-3 py-2 sm:px-3 sm:py-1.5 rounded-lg border text-[12px] sm:text-[11px] font-mono shadow-sm ${theme.isDark ? "bg-[#09090b] border-zinc-800" : "bg-white border-slate-300 text-slate-850"}`}>
@@ -583,10 +638,10 @@ export default function Filters({
                 const val = e.target.value;
                 if (val === "custom") return;
                 if (val === "all") {
-                  if (currentSelectedYear === 'all') {
+                  if (currentSelectedYears.length !== 1) {
                     setFilters(prev => ({ ...prev, dateRange: ['1990-01-01', '2100-12-31'] }));
                   } else {
-                    setFilters(prev => ({ ...prev, dateRange: [`${currentSelectedYear}-01-01`, `${currentSelectedYear}-12-31`] }));
+                    setFilters(prev => ({ ...prev, dateRange: [`${currentSelectedYears[0]}-01-01`, `${currentSelectedYears[0]}-12-31`] }));
                   }
                   return;
                 }

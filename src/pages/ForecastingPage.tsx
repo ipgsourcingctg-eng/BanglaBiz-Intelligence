@@ -47,6 +47,55 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
   const [forecast, setForecast] = useState<SalesForecastData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedKAM, setSelectedKAM] = useState<string>("All KAMs");
+  const [attemptsLeft, setAttemptsLeft] = useState(3);
+
+  // Helper for Usage Limiting
+  const getUsageCount = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const stored = localStorage.getItem('forecast_usage');
+    if (stored) {
+      try {
+        const data = JSON.parse(stored);
+        if (data.date === today) return data.count;
+      } catch (e) {
+        console.error("Error parsing usage data", e);
+      }
+    }
+    return 0;
+  };
+
+  const incrementUsage = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const count = getUsageCount() + 1;
+    localStorage.setItem('forecast_usage', JSON.stringify({ date: today, count }));
+    setAttemptsLeft(3 - count);
+    return count;
+  };
+
+  // Helper for Caching
+  const getCachedForecast = (kam: string) => {
+    const stored = localStorage.getItem('forecast_cache');
+    if (stored) {
+      try {
+        const cache = JSON.parse(stored);
+        return cache[kam] || null;
+      } catch (e) {
+        console.error("Error parsing cache", e);
+      }
+    }
+    return null;
+  };
+
+  const saveToCache = (kam: string, data: SalesForecastData) => {
+    const stored = localStorage.getItem('forecast_cache') || '{}';
+    try {
+      const cache = JSON.parse(stored);
+      cache[kam] = data;
+      localStorage.setItem('forecast_cache', JSON.stringify(cache));
+    } catch (e) {
+      localStorage.setItem('forecast_cache', JSON.stringify({ [kam]: data }));
+    }
+  };
 
   const searchQuery = (filters?.searchQuery || "").toLowerCase();
 
@@ -104,7 +153,25 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
     ).sort((a, b) => a.month.localeCompare(b.month));
   }, [filteredAllRecords]);
 
-  const fetchForecast = async () => {
+  const fetchForecast = async (force: boolean = false) => {
+    // 1. Check Cache first if not forcing
+    if (!force) {
+      const cached = getCachedForecast(selectedKAM);
+      if (cached) {
+        setForecast(cached);
+        setAttemptsLeft(3 - getUsageCount());
+        return;
+      }
+    }
+
+    // 2. Check Daily Limit
+    const currentUsage = getUsageCount();
+    if (currentUsage >= 3) {
+      setError("Daily AI forecasting limit reached (3/3). Please try again tomorrow or use cached data.");
+      setAttemptsLeft(0);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -112,13 +179,17 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          history: history.slice(-1000), // Increased context for broader customer analysis
+          history: history.slice(-1000), 
           funnel: filteredFunnelRecords
         })
       });
 
       if (!response.ok) throw new Error("Failed to fetch forecast from AI engine.");
       const data = await response.json();
+      
+      // 3. Save to Cache & Update Usage
+      saveToCache(selectedKAM, data);
+      incrementUsage();
       setForecast(data);
     } catch (err: any) {
       setError(err.message);
@@ -128,6 +199,7 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
   };
 
   useEffect(() => {
+    setAttemptsLeft(3 - getUsageCount());
     if (allRecords.length > 0) {
       fetchForecast();
     }
@@ -227,23 +299,36 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
             </button>
 
             <button 
-              onClick={fetchForecast}
-              disabled={loading}
+              onClick={() => fetchForecast(true)}
+              disabled={loading || attemptsLeft <= 0}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              Refresh ({attemptsLeft})
             </button>
           </div>
         </div>
 
-        {forecast?.strategicAnalysis && (
+        {forecast?.strategicAnalysis && !error && (
           <div className="mt-6 flex items-start gap-3 p-4 bg-amber-500/5 border-l-4 border-amber-500 rounded-r-lg">
             <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
             <p className="text-sm text-slate-300 italic">
               <span className="font-bold text-amber-400 not-italic mr-1">Strategic Note:</span>
               {forecast.strategicAnalysis}
             </p>
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-6 flex items-start gap-3 p-4 bg-red-500/5 border-l-4 border-red-500 rounded-r-lg">
+            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <div className="text-sm text-slate-300 italic">
+              <span className="font-bold text-red-400 not-italic mr-1">Limit Restriction:</span>
+              {error}
+              {getCachedForecast(selectedKAM) && (
+                <p className="mt-1 text-slate-400 not-italic">Showing previously cached data for {selectedKAM}.</p>
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -424,10 +424,8 @@ export const getBranchTargets = (
         target = Math.max(1000000, Math.ceil(baseTarget / 500000) * 500000);
       }
 
-      // USER REQUIREMENT: Current Year Collection Target = Total Sales Value of All Years - Total Collection of All Years
-      const totalSalesAllTime = branchGlobalSalesMap[branchName] || 0;
-      const totalColAllTime = branchGlobalCollectionMap[branchName] || 0;
-      collTarget = Math.max(0, totalSalesAllTime - totalColAllTime);
+      // USER REQUIREMENT: Collection Target = Total Actual Sales in that Year
+      collTarget = totals.actual;
 
       const { actual, actualCollection } = totals;
       const achievementRate =
@@ -591,10 +589,8 @@ export const getRepresentativeTargets = (
         target = Math.max(500000, Math.ceil(baseTarget / 250000) * 250000);
       }
 
-      // USER REQUIREMENT: Current Year Collection Target = KAM Total Sales Value of All Years - KAM Total Collection of All Years
-      const totalSalesAllTime = kamGlobalSalesMap[repName] || 0;
-      const totalColAllTime = kamGlobalCollectionMap[repName] || 0;
-      collTarget = Math.max(0, totalSalesAllTime - totalColAllTime);
+      // USER REQUIREMENT: Collection Target = Total Actual Sales in that Year
+      collTarget = totals.actual;
 
       const { actual, actualCollection } = totals;
       const achievementRate =

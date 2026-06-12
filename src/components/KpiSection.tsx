@@ -174,7 +174,7 @@ export default function KpiSection({
       icon: <Target size={18} className="text-rose-400" />,
       sparkColor: "#f43f5e",
       sparkData: getMetricSeries("Total Price"), // Use revenue as proxy
-      tagline: `${new Date().getFullYear()} Quota Allocation`,
+      tagline: `${yearsInFiltered.length > 0 ? yearsInFiltered.join(", ") : new Date().getFullYear()} Quota Allocation`,
       targetId: "target-performance-section",
       tab: "pipeline"
     },
@@ -211,7 +211,7 @@ export default function KpiSection({
       sub: nationalTarget > 0 ? `Goal: ${formatBDT(nationalTarget, false, true)}` : "Goal: 0 BDT",
       icon: <Target size={18} className="text-sky-400" />, // Changed color to sky for variety
       sparkColor: "#0ea5e9",
-      tagline: filteredRecords.length > 0 ? `${new Date().getFullYear()} Quota Status` : "No target defined",
+      tagline: filteredRecords.length > 0 ? `${yearsInFiltered.length > 0 ? yearsInFiltered.join(", ") : new Date().getFullYear()} Quota Status` : "No target defined",
       isProgress: true,
       pct: Math.min(100, totalAchievementRate),
       targetId: "target-performance-section",

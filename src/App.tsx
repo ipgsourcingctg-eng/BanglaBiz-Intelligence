@@ -65,6 +65,7 @@ import ForecastingPage from "./pages/ForecastingPage";
 
 export interface DashboardFilters {
   dateRange: [string, string];
+  years: number[];
   branch: string[];
   salesPerson: string[];
   buyerGroup: string[];
@@ -84,6 +85,7 @@ const getDefaultFilters = (records: SalesRecord[]): DashboardFilters => {
 
   return {
     dateRange: [`${currentYear}-01-01`, `${currentYear}-12-31`],
+    years: [currentYear],
     branch: [],
     salesPerson: [],
     buyerGroup: [],
@@ -130,9 +132,10 @@ export default function App() {
       const records = getLocalSalesRecords();
       return getDefaultFilters(records);
     } catch {
-      const runningYear = new Date().getFullYear().toString();
+      const runningYear = new Date().getFullYear();
       return {
         dateRange: [`${runningYear}-01-01`, `${runningYear}-12-31`],
+        years: [runningYear],
         branch: [],
         salesPerson: [],
         buyerGroup: [],
@@ -515,13 +518,22 @@ export default function App() {
       )
         return false;
 
-      // 9. Chronological Date boundaries
+      // 9. Chronological Date boundaries / Years
+      const rowDate = (r["Invoice Date"] || r["Sales Date"]) ? (r["Invoice Date"] || r["Sales Date"]).substring(0, 10) : "";
+      
+      if (filters.years && filters.years.length > 0) {
+        if (rowDate) {
+          const rowYear = new Date(rowDate).getFullYear();
+          if (!filters.years.includes(rowYear)) return false;
+        } else {
+          return false;
+        }
+      }
+
       if (filters.dateRange[0]) {
-        const rowDate = (r["Invoice Date"] || r["Sales Date"]) ? (r["Invoice Date"] || r["Sales Date"]).substring(0, 10) : "";
         if (rowDate && rowDate < filters.dateRange[0]) return false;
       }
       if (filters.dateRange[1]) {
-        const rowDate = (r["Invoice Date"] || r["Sales Date"]) ? (r["Invoice Date"] || r["Sales Date"]).substring(0, 10) : "";
         if (rowDate && rowDate > filters.dateRange[1]) return false;
       }
 
@@ -553,13 +565,21 @@ export default function App() {
         if (!matchesQuery) return false;
       }
 
-      // Check date range
+      // Check date range / Years
+      const rowDate = coll.paymentDate;
+      if (filters.years && filters.years.length > 0) {
+        if (rowDate) {
+          const rowYear = new Date(rowDate).getFullYear();
+          if (!filters.years.includes(rowYear)) return false;
+        } else {
+          return false;
+        }
+      }
+
       if (filters.dateRange[0]) {
-        const rowDate = coll.paymentDate;
         if (rowDate && rowDate < filters.dateRange[0]) return false;
       }
       if (filters.dateRange[1]) {
-        const rowDate = coll.paymentDate;
         if (rowDate && rowDate > filters.dateRange[1]) return false;
       }
 
@@ -630,7 +650,13 @@ export default function App() {
         if (!matchesQuery) return false;
       }
 
-      // Check date range
+      // Check date range / Years
+      if (filters.years && filters.years.length > 0) {
+        const startYear = new Date(f.startDate).getFullYear();
+        const endYear = new Date(f.endDate).getFullYear();
+        if (!filters.years.includes(startYear) && !filters.years.includes(endYear)) return false;
+      }
+
       if (filters.dateRange[0]) {
         if (f.startDate < filters.dateRange[0] && f.endDate < filters.dateRange[0]) return false;
       }
