@@ -211,24 +211,51 @@ export const safeLocalStorage = {
           `[safeLocalStorage] Browser storage limit reached for key "${key}". Initiating self-healing and auto-recovery.`,
         );
 
+        // 1. Proactively clear non-essential system data to immediately free up space
+        let freedSpace = false;
+        try {
+          if (localStorage.getItem(STORAGE_KEYS.SYNC_LOGS)) {
+            localStorage.removeItem(STORAGE_KEYS.SYNC_LOGS);
+            delete memoryCache[STORAGE_KEYS.SYNC_LOGS];
+            freedSpace = true;
+          }
+        } catch (_) {}
+
+        // 2. If we freed space, retry setting the original value first to preserve maximum data fidelity
+        if (freedSpace) {
+          try {
+            localStorage.setItem(key, value);
+            console.info(
+              `[safeLocalStorage] Self-healed: Successfully written "${key}" without downsampling after clearing sync logs.`
+            );
+            return true;
+          } catch (_) {
+            // If still failing, fall back to downsampling/slicing
+          }
+        }
+
+        // 3. Perform granular slicing/downsampling of sales records to find the highest subset that fits
         if (key === STORAGE_KEYS.SALES_RECORDS) {
           try {
             const records = decompressRecords(value);
-            // Slicing/downsampling loop to find the maximal payload we can save safely
-            for (const limit of [
+            // Dynamic cascading search of sub-limits: starts with high records and drops dynamically
+            const limits = [
               80000, 60000, 40000, 30000, 20000, 15000, 10000, 5000,
-            ]) {
+              4000, 3000, 2000, 1500, 1000, 750, 500, 250, 100, 50
+            ];
+            for (const limit of limits) {
               if (records.length > limit) {
-                const sliced = records.slice(0, limit);
+                // Slice from the end of the array to preserve the latest (most recent) entries
+                const sliced = records.slice(-limit);
                 const compressed = compressRecords(sliced);
                 try {
                   localStorage.setItem(key, compressed);
                   console.info(
-                    `[safeLocalStorage] Restored storage: Sliced and safely persisted latest {limit} records.`,
+                    `[safeLocalStorage] Restored storage: Sliced and safely persisted latest ${limit} records.`,
                   );
                   return true;
                 } catch (_) {
-                  // continues to next smaller limit
+                  // If write fails, it continues to try the next, smaller limit
                 }
               }
             }
@@ -239,12 +266,6 @@ export const safeLocalStorage = {
             );
           }
         }
-
-        // Clear sync logs to free up blocks
-        try {
-          localStorage.removeItem(STORAGE_KEYS.SYNC_LOGS);
-          delete memoryCache[STORAGE_KEYS.SYNC_LOGS];
-        } catch (_) {}
       } else {
         console.warn(
           `[safeLocalStorage] Failed to write key "${key}" to localStorage. Running in RAM-only cache mode fallback.`,

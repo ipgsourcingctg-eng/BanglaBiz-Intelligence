@@ -232,7 +232,7 @@ export default function App() {
         return foundKey !== undefined ? r[foundKey] : defaultVal;
       };
 
-      const partner = findVal(["Partner", "Client", "Customer", "Buyer"], "Unknown");
+      const partner = findVal(["Partners", "Partner", "Client", "Customer", "Buyer"], "Unknown");
       const salesman = findVal(["Salesman", "Sales Person", "SalesPerson", "KAM", "Representative"], "Unknown");
       const quarter = findVal(["Quarter", "Qtr"], "2026 Q2");
       const startDate = formatToYmd(findVal(["Start Date", "StartDate", "Date"], "2026-05-21"));

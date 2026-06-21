@@ -231,6 +231,8 @@ export interface SoftwareBrandOem {
 export interface MonthlyForecastItem {
   month: string;
   predictedRevenue: number;
+  organicForecast: number;
+  pipelineForecast: number;
   growthRate: number;
 }
 
@@ -238,6 +240,7 @@ export interface CustomerForecastItem {
   customer: string;
   predictedNext3Months: number;
   funnelPotential: number;
+  activeDealsCount?: number;
   confidence: "High" | "Medium" | "Low";
 }
 

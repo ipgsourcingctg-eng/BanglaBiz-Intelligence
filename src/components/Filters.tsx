@@ -52,6 +52,7 @@ export default function Filters({
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [searchTerms, setSearchTerms] = useState<Record<string, string>>({});
   const [customGroups, setCustomGroups ] = useState<CustomBuyerGroup[]>(() => getCustomBuyerGroups());
+  const [isSlicersExpanded, setIsSlicersExpanded] = useState(false);
 
   React.useEffect(() => {
     const handleUpdate = () => {
@@ -527,35 +528,51 @@ export default function Filters({
 
       {/* Header element with matching count and Reset controls */}
       <div className={`flex flex-col sm:flex-row sm:items-center justify-between border-b pb-3 shrink-0 gap-3 sm:gap-0 ${theme.isDark ? "border-zinc-800/60" : "border-slate-200"}`}>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
-          <div className="flex items-center gap-2">
-            <Filter size={15} className={theme.isDark ? "text-indigo-400" : "text-indigo-600"} />
-            <h4 className={`font-bold text-[13px] uppercase tracking-wider font-sans ${theme.isDark ? "text-zinc-100" : "text-slate-800"}`}>
-              Global Analysis Slicers
-            </h4>
+        <div className="flex items-center justify-between w-full sm:w-auto overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-2">
+              <Filter size={15} className={theme.isDark ? "text-indigo-400" : "text-indigo-600"} />
+              <h4 className={`font-bold text-[13px] uppercase tracking-wider font-sans ${theme.isDark ? "text-zinc-100" : "text-slate-800"}`}>
+                Global Analysis Slicers
+              </h4>
+            </div>
+            <span className={`text-[11px] font-mono font-medium opacity-80 ${theme.isDark ? "text-indigo-400" : "text-indigo-600"}`}>
+              ({totalMatchingCount} of {totalAllCount} {recordsLabel} matching)
+            </span>
           </div>
-          <span className={`text-[11px] font-mono font-medium opacity-80 ${theme.isDark ? "text-indigo-400" : "text-indigo-600"}`}>
-            ({totalMatchingCount} of {totalAllCount} {recordsLabel} matching)
-          </span>
+
+          {/* Toggle button for mobile */}
+          <button
+            onClick={() => setIsSlicersExpanded(!isSlicersExpanded)}
+            className={`sm:hidden p-2 rounded-lg border transition-all ${
+              theme.isDark 
+                ? "bg-slate-800/50 border-slate-700 text-slate-300" 
+                : "bg-slate-100 border-slate-200 text-slate-600"
+            }`}
+          >
+            {isSlicersExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
         </div>
         
-        <button
-          id="reset-all-filters-btn"
-          onClick={resetAllFilters}
-          className={`flex items-center justify-center gap-2 text-[11px] font-bold transition cursor-pointer uppercase tracking-wider px-4 py-2 sm:px-3 sm:py-1.5 rounded-md border w-full sm:w-auto shadow-sm ${
-            theme.isDark 
-              ? "text-amber-500 bg-amber-500/5 border-amber-500/20 hover:bg-amber-500/15" 
-              : "text-amber-700 bg-amber-50 border-amber-300 hover:bg-amber-100"
-          }`}
-          title="Clear all active constraints"
-        >
-          <RotateCcw size={12} className="shrink-0" />
-          <span>Clear Slicers</span>
-        </button>
+        <div className={`flex items-center gap-2 ${isSlicersExpanded ? "flex" : "hidden sm:flex"}`}>
+          <button
+            id="reset-all-filters-btn"
+            onClick={resetAllFilters}
+            className={`flex items-center justify-center gap-2 text-[11px] font-bold transition cursor-pointer uppercase tracking-wider px-4 py-2 sm:px-3 sm:py-1.5 rounded-md border w-full sm:w-auto shadow-sm ${
+              theme.isDark 
+                ? "text-amber-500 bg-amber-500/5 border-amber-500/20 hover:bg-amber-500/15" 
+                : "text-amber-700 bg-amber-50 border-amber-300 hover:bg-amber-100"
+            }`}
+            title="Clear all active constraints"
+          >
+            <RotateCcw size={12} className="shrink-0" />
+            <span>Clear Slicers</span>
+          </button>
+        </div>
       </div>
 
       {/* Slicer grid / horizontal row */}
-      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 relative z-40">
+      <div className={`${isSlicersExpanded ? "flex" : "hidden sm:flex"} flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 relative z-40 animate-fade-in`}>
         
         {/* Date picking section inline */}
         <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">

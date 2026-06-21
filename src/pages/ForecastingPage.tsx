@@ -31,7 +31,8 @@ import {
   BarChart, 
   Bar, 
   Cell,
-  Legend
+  Legend,
+  LabelList
 } from "recharts";
 import { SalesRecord, FunnelRecord, DashboardTheme, SalesForecastData, CustomerForecastItem } from "../types";
 
@@ -47,6 +48,8 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
   const [forecast, setForecast] = useState<SalesForecastData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedKAM, setSelectedKAM] = useState<string>("All KAMs");
+  const [forecastMode, setForecastMode] = useState<"historical" | "funnel">("funnel");
+  const [isLimitEnabled, setIsLimitEnabled] = useState(true);
   const [attemptsLeft, setAttemptsLeft] = useState(3);
 
   // Helper for Usage Limiting
@@ -154,9 +157,10 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
   }, [filteredAllRecords]);
 
   const fetchForecast = async (force: boolean = false) => {
+    const cacheKey = `${selectedKAM}_${forecastMode}`;
     // 1. Check Cache first if not forcing
     if (!force) {
-      const cached = getCachedForecast(selectedKAM);
+      const cached = getCachedForecast(cacheKey);
       if (cached) {
         setForecast(cached);
         setAttemptsLeft(3 - getUsageCount());
@@ -165,11 +169,13 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
     }
 
     // 2. Check Daily Limit
-    const currentUsage = getUsageCount();
-    if (currentUsage >= 3) {
-      setError("Daily AI forecasting limit reached (3/3). Please try again tomorrow or use cached data.");
-      setAttemptsLeft(0);
-      return;
+    if (isLimitEnabled) {
+      const currentUsage = getUsageCount();
+      if (currentUsage >= 3) {
+        setError("Daily AI forecasting limit reached (3/3). Please try again tomorrow or use cached data.");
+        setAttemptsLeft(0);
+        return;
+      }
     }
 
     setLoading(true);
@@ -180,7 +186,8 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           history: history.slice(-1000), 
-          funnel: filteredFunnelRecords
+          funnel: filteredFunnelRecords,
+          forecastMode
         })
       });
 
@@ -188,7 +195,7 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
       const data = await response.json();
       
       // 3. Save to Cache & Update Usage
-      saveToCache(selectedKAM, data);
+      saveToCache(cacheKey, data);
       incrementUsage();
       setForecast(data);
     } catch (err: any) {
@@ -199,11 +206,12 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
   };
 
   useEffect(() => {
-    setAttemptsLeft(3 - getUsageCount());
+    const usage = getUsageCount();
+    setAttemptsLeft(isLimitEnabled ? (3 - usage) : 99); 
     if (allRecords.length > 0) {
       fetchForecast();
     }
-  }, [selectedKAM]);
+  }, [selectedKAM, forecastMode, isLimitEnabled]);
 
   const exportToExcel = () => {
     if (!forecast) return;
@@ -272,10 +280,39 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
             </div>
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-white">AI-Powered Sales Forecast</h2>
-              <p className="text-slate-400 text-sm">Multi-dimensional analysis of buyer history and funnel conversion metrics.</p>
+              <p className="text-slate-400 text-sm">
+                {forecastMode === 'historical' 
+                  ? 'Projecting growth using multi-year historical invoice patterns and seasonality.' 
+                  : 'Predicting revenue based on active funnel pipeline weighted conversion metrics.'}
+              </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <div className="bg-slate-800 p-1 rounded-xl border border-slate-700 flex mr-2">
+              <button 
+                onClick={() => setForecastMode('funnel')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${forecastMode === 'funnel' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Funnel Based
+              </button>
+              <button 
+                onClick={() => setForecastMode('historical')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${forecastMode === 'historical' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Historical Data
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 rounded-lg border border-slate-700">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">AI Limit</span>
+              <button 
+                onClick={() => setIsLimitEnabled(!isLimitEnabled)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isLimitEnabled ? 'bg-blue-600' : 'bg-slate-700'}`}
+              >
+                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isLimitEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+              </button>
+            </div>
+
             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 rounded-lg border border-slate-700">
               <Filter className="w-4 h-4 text-slate-400" />
               <select 
@@ -300,11 +337,11 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
 
             <button 
               onClick={() => fetchForecast(true)}
-              disabled={loading || attemptsLeft <= 0}
+              disabled={loading || (isLimitEnabled && attemptsLeft <= 0)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh ({attemptsLeft})
+              Refresh ({isLimitEnabled ? attemptsLeft : '∞'})
             </button>
           </div>
         </div>
@@ -366,6 +403,9 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
           <p className="text-3xl font-bold mt-1">
             {forecast?.customerForecast?.length || 0} Buyers
           </p>
+          <div className="text-[10px] text-slate-500 font-mono mt-1 uppercase">
+            {forecast?.customerForecast?.reduce((s, c) => s + (c.activeDealsCount || 0), 0) || 0} active funnel deals
+          </div>
         </div>
       </div>
 
@@ -374,15 +414,19 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
         <div className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800">
           <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-blue-400" />
-            Revenue Forecast Trend
+            Projected Growth Breakdown
           </h3>
           <div className="h-[350px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={forecast?.monthlyForecast}>
                 <defs>
-                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="colorOrg" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
                     <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorPipe" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
@@ -423,15 +467,25 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
                     }
                     return val;
                   }}
-                  formatter={(value: any) => [formatBDT(value), "Predicted Revenue"]}
+                  formatter={(value: any, name: string) => [formatBDT(value), name === "organicForecast" ? "Organic Base" : name === "pipelineForecast" ? "Pipeline Potential" : "Total Forecast"]}
                 />
                 <Area 
                   type="monotone" 
-                  dataKey="predictedRevenue" 
+                  dataKey="organicForecast" 
+                  stackId="1"
                   stroke="#3b82f6" 
-                  strokeWidth={3}
+                  strokeWidth={2}
                   fillOpacity={1} 
-                  fill="url(#colorRev)" 
+                  fill="url(#colorOrg)" 
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="pipelineForecast" 
+                  stackId="1"
+                  stroke="#8b5cf6" 
+                  strokeWidth={2}
+                  fillOpacity={1} 
+                  fill="url(#colorPipe)" 
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -444,17 +498,19 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
             <PieChartIcon className="w-5 h-5 text-purple-400" />
             Top 15 Account Pipeline Depth
           </h3>
-          <div className="h-[350px]">
+          <div className="h-[550px]">
              <ResponsiveContainer width="100%" height="100%">
-              <BarChart layout="vertical" data={(forecast?.customerForecast || []).sort((a, b) => b.funnelPotential - a.funnelPotential).slice(0, 15)}>
+              <BarChart 
+                layout="vertical" 
+                data={(forecast?.customerForecast || []).sort((a, b) => b.funnelPotential - a.funnelPotential).slice(0, 15)}
+                margin={{ top: 25, right: 30, left: 10, bottom: 5 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
                 <XAxis type="number" hide />
                 <YAxis 
                   dataKey="customer" 
                   type="category" 
-                  stroke="#94a3b8" 
-                  fontSize={10}
-                  width={150}
+                  hide
                 />
                 <Tooltip 
                   contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #1e293b", borderRadius: "12px" }}
@@ -462,7 +518,15 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
                   itemStyle={{ color: "#fff" }}
                   formatter={(value: any) => [formatBDT(value), "Pipeline Value"]}
                 />
-                <Bar dataKey="funnelPotential" radius={[0, 4, 4, 0]}>
+                <Bar dataKey="funnelPotential" radius={[0, 4, 4, 0]} barSize={32}>
+                  <LabelList 
+                    dataKey="customer" 
+                    position="insideLeft" 
+                    offset={12} 
+                    fill="#ffffff" 
+                    fontSize={11} 
+                    style={{ fontWeight: '600', textShadow: '0px 1px 2px rgba(0,0,0,0.5)' }}
+                  />
                   {(forecast?.customerForecast || []).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={index % 2 === 0 ? "#8b5cf6" : "#6366f1"} />
                   ))}
@@ -499,6 +563,11 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm font-mono text-indigo-400">{formatBDT(item.funnelPotential)}</div>
+                    {item.activeDealsCount && item.activeDealsCount > 0 ? (
+                      <div className="text-[9px] text-indigo-500/70 font-bold uppercase mt-0.5">
+                        {item.activeDealsCount} Leads in Funnel
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <div className="text-sm font-bold text-emerald-400">{formatBDT(item.predictedNext3Months)}</div>
