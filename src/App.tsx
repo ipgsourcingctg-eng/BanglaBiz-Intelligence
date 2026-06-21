@@ -42,6 +42,7 @@ import Header from "./components/Header";
 import Filters from "./components/Filters";
 import KpiSection from "./components/KpiSection";
 import AiInsights from "./components/AiInsights";
+import { AiAdvisor } from "./components/AiAdvisor";
 import Charts from "./components/Charts";
 import Login from "./pages/Login";
 import { exportDashboardToPdf, exportDashboardToSlides } from "./utils/export";
@@ -78,6 +79,7 @@ export interface DashboardFilters {
   collectionStatus?: string[];
   funnelStatus?: string[];
   funnelQuarter?: string[];
+  customBuyerGroups?: string[];
 }
 
 const getDefaultFilters = (records: SalesRecord[]): DashboardFilters => {
@@ -218,12 +220,20 @@ export default function App() {
   };
 
   const handleImportCollections = (records: any[]) => {
-    saveLocalCollectionRecords(records);
+    const cleaned = records.filter(r => {
+      const values = Object.values(r).map(v => String(v || "").trim());
+      return values.some(v => v !== "");
+    });
+    saveLocalCollectionRecords(cleaned);
     setCollectionRecords(getLocalCollectionRecords());
   };
 
   const handleImportFunnels = (records: any[]) => {
-    const parsed = records.map((r, idx) => {
+    const cleaned = records.filter(r => {
+      const values = Object.values(r).map(v => String(v || "").trim());
+      return values.some(v => v !== "");
+    });
+    const parsed = cleaned.map((r, idx) => {
       const keys = Object.keys(r);
       const findVal = (possibleNames: string[], defaultVal: any = "") => {
         const foundKey = keys.find(k => 
@@ -270,7 +280,11 @@ export default function App() {
   };
 
   const handleImportLeads = (records: any[]) => {
-    const parsed: LeadAnalysisRecord[] = records.map((r, idx) => {
+    const cleaned = records.filter(r => {
+      const values = Object.values(r).map(v => String(v || "").trim());
+      return values.some(v => v !== "");
+    });
+    const parsed: LeadAnalysisRecord[] = cleaned.map((r, idx) => {
       const qs = Object.keys(r);
       const findVal = (possibleNames: string[], defaultVal: any = "") => {
         const foundKey = qs.find(k => 
@@ -701,6 +715,33 @@ export default function App() {
     });
   }, [funnelRecords, filters, salesBySalesmanMap]);
 
+  const summaryData = useMemo(() => {
+    const totalRevenue = filteredRecords.reduce((s, r) => s + (r["Total Price"] || 0), 0);
+    const totalNetSales = filteredRecords.reduce((s, r) => s + (r["Exclude Vat Tax"] || 0), 0);
+    const totalQty = filteredRecords.reduce((s, r) => s + (r.Quantity || 0), 0);
+    const totalVatTax = filteredRecords.reduce((s, r) => s + (r["Vat & Tax"] || 0), 0);
+    
+    return {
+      revenue: totalRevenue,
+      netSales: totalNetSales,
+      orders: filteredRecords.length,
+      quantity: totalQty,
+      vatTax: totalVatTax,
+      activeBuyers: new Set(filteredRecords.map(s => s.Buyer)).size
+    };
+  }, [filteredRecords]);
+
+  const handleDrillDown = (type: keyof DashboardFilters, value: string) => {
+    setFilters(prev => {
+      const currentValues = prev[type] as string[] || [];
+      if (currentValues.includes(value)) return prev;
+      return {
+        ...prev,
+        [type]: [...currentValues, value]
+      };
+    });
+  };
+
   // Export handlers
   const handleDownloadPdfReport = async () => {
     const mainDashboardId = "executive-reporting-boundaries";
@@ -1019,6 +1060,7 @@ export default function App() {
                           filteredRecords={filteredRecords}
                           allRecords={allRecords}
                           theme={theme}
+                          onDrillDown={handleDrillDown}
                         />
                       </div>
                       <div className="xl:col-span-1 h-full">
@@ -1039,6 +1081,9 @@ export default function App() {
       </div>
       {/* Mobile Navigation Deck */}
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} theme={theme} />
+
+      {/* AI Financial Advisor Chat Interface */}
+      <AiAdvisor dataSummary={summaryData} theme={theme} />
     </div>
   );
 }

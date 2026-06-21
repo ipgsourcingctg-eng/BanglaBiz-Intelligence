@@ -247,6 +247,12 @@ export interface CustomerForecastItem {
 export interface SalesForecastData {
   monthlyForecast: MonthlyForecastItem[];
   customerForecast: CustomerForecastItem[];
+  riskFactors?: {
+    factor: string;
+    impact: "High" | "Medium" | "Low";
+    description: string;
+    mitigation: string;
+  }[];
   strategicAnalysis: string;
 }
 

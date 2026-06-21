@@ -24,14 +24,7 @@ function getGeminiClient(): GoogleGenAI {
     if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
       throw new Error("GEMINI_API_KEY is not configured or holds a placeholder value.");
     }
-    aiClient = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build"
-        }
-      }
-    });
+    aiClient = new GoogleGenAI({ apiKey });
   }
   return aiClient;
 }
@@ -260,13 +253,21 @@ Return a JSON object with the following structure:
       "confidence": "High/Medium/Low" 
     }
   ],
+  "riskFactors": [
+    {
+      "factor": "Short Name of Risk",
+      "impact": "High/Medium/Low",
+      "description": "Specific detail about the risk",
+      "mitigation": "Strategic advice to reduce impact"
+    }
+  ],
   "strategicAnalysis": "A 3-4 sentence analytical brief explaining the trajectory. Mention specific top brands or risky accounts identified in the funnel."
 }
 Do not return any conversational text, only the raw JSON.
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash", 
+      model: "gemini-3.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -281,6 +282,7 @@ Do not return any conversational text, only the raw JSON.
     res.json({
       monthlyForecast: data.monthlyForecast || [],
       customerForecast: data.customerForecast || [],
+      riskFactors: data.riskFactors || [],
       strategicAnalysis: data.strategicAnalysis || "Forecast generated based on available data indicators."
     });
   } catch (error: any) {
@@ -319,9 +321,52 @@ Do not return any conversational text, only the raw JSON.
           confidence: fDeals.length > 0 ? "High" : "Medium"
         };
       }),
+      riskFactors: [
+        {
+          factor: "Market Volatility",
+          impact: "Medium",
+          description: "Fluctuations in tech import costs may impact margins.",
+          mitigation: "Negotiate bulk purchase agreements with OEMs."
+        }
+      ],
       strategicAnalysis: "Forecast derived via historical patterns and active pipeline weighting. Funnel data indicates steady engagement across major enterprise accounts."
     };
     res.json(fallback);
+  }
+});
+
+// 2.6. Interactive AI Financial Advisor (Chat Interface)
+app.post("/api/ai-chat", async (req, res) => {
+  const { messages, dataSummary } = req.body;
+
+  try {
+    const ai = getGeminiClient();
+    const chat = ai.chats.create({
+      model: "gemini-3.5-flash",
+      config: {
+        systemInstruction: `You are 'SalesPulse Advisor', an elite AI Financial Consultant for a technology distribution company in Bangladesh. 
+        You have access to real-time sales, collection, and funnel data. 
+        Your tone is professional, helpful, and highly analytical. 
+        When asked about data, refer to the provided 'Current Data Summary'.
+        All currency is in BDT (৳). Use terms like Lakhs (L) and Crores (Cr).
+        Keep responses concise and visually structured (use markdown).
+        
+        Current Data Summary:
+        ${JSON.stringify(dataSummary)}`
+      },
+      history: messages.slice(0, -1).map((m: any) => ({
+        role: m.role === "user" ? "user" : "model",
+        parts: [{ text: m.content }]
+      })),
+    });
+
+    const lastMessage = messages[messages.length - 1].content;
+    const response = await chat.sendMessage({ message: lastMessage });
+
+    res.json({ content: response.text });
+  } catch (error: any) {
+    console.error("AI Advisor Chat Error:", error);
+    res.status(500).json({ error: "Failed to generate AI response. Please check GEMINI_API_KEY." });
   }
 });
 

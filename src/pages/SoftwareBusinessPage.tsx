@@ -447,8 +447,8 @@ export default function SoftwareBusinessPage({ theme, filters }: SoftwareBusines
                   cursor={{ fill: 'rgba(255, 255, 255, 0.03)' }}
                   content={({ active, payload, label }) => {
                     if (active && payload && payload.length) {
-                      const targetVal = payload[0].value;
-                      const achievedVal = payload[1]?.value || 0;
+                      const targetVal = Number(payload[0].value || 0);
+                      const achievedVal = Number(payload[1]?.value || 0);
                       const rate = targetVal > 0 ? (achievedVal / targetVal) * 100 : 0;
                       return (
                         <div className="backdrop-blur-md bg-slate-950/90 border border-slate-800/80 p-3 rounded-xl shadow-2xl space-y-2 pointer-events-none min-w-[200px]">

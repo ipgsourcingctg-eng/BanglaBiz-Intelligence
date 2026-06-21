@@ -14,7 +14,7 @@ import {
   Trophy,
   Calendar
 } from "lucide-react";
-import { SalesRecord, DashboardTheme } from "../types";
+import { SalesRecord, DashboardTheme, DashboardFilters } from "../types";
 import { formatBDT } from "../utils/format";
 import { getMonthsList } from "../db/localDb";
 
@@ -22,11 +22,18 @@ interface ChartsProps {
   filteredRecords: SalesRecord[];
   allRecords: SalesRecord[];
   theme: DashboardTheme;
+  onDrillDown?: (filterType: keyof DashboardFilters, value: string) => void;
 }
 
-export default function Charts({ filteredRecords, allRecords, theme }: ChartsProps) {
+export default function Charts({ filteredRecords, allRecords, theme, onDrillDown }: ChartsProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [hoveredDonutSlice, setHoveredDonutSlice] = useState<number | null>(null);
+
+  const handleDrillDown = (type: keyof DashboardFilters, value: string) => {
+    if (onDrillDown) {
+      onDrillDown(type, value);
+    }
+  };
 
   // 1. CHRONOLOGICAL REVENUE TREND (Line + Area)
   const getPrimaryYear = () => {
@@ -310,6 +317,7 @@ export default function Charts({ filteredRecords, allRecords, theme }: ChartsPro
                   className="cursor-pointer transition-all duration-200"
                   onMouseEnter={() => setHoveredDonutSlice(idx)}
                   onMouseLeave={() => setHoveredDonutSlice(null)}
+                  onClick={() => handleDrillDown("branch", slice.name)}
                 />
               ))}
 
@@ -328,14 +336,15 @@ export default function Charts({ filteredRecords, allRecords, theme }: ChartsPro
             {donutSlices.slice(0, 4).map((b, idx) => (
               <div 
                 key={b.name} 
-                className={`flex items-center justify-between p-1.5 rounded-md transition ${
+                className={`flex items-center justify-between p-1.5 rounded-md transition cursor-pointer ${
                   hoveredDonutSlice === idx 
                     ? theme.isDark ? "bg-slate-800 border-l-2" : "bg-slate-100 border-l-2" 
-                    : ""
+                    : "hover:bg-slate-800/10"
                 }`}
                 style={{ borderLeftColor: hoveredDonutSlice === idx ? b.color : "transparent" }}
                 onMouseEnter={() => setHoveredDonutSlice(idx)}
                 onMouseLeave={() => setHoveredDonutSlice(null)}
+                onClick={() => handleDrillDown("branch", b.name)}
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: b.color }} />
@@ -375,9 +384,13 @@ export default function Charts({ filteredRecords, allRecords, theme }: ChartsPro
             topProducts.map((p) => {
               const rectWidthPct = Math.min(100, Math.max(8, (p.sales / topProductMaxVal) * 100));
               return (
-                <div key={p.name} className="space-y-1.5">
+                <div 
+                  key={p.name} 
+                  className="space-y-1.5 cursor-pointer group/item"
+                  onClick={() => handleDrillDown("productGroup", p.name)}
+                >
                   <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-slate-200 font-semibold truncate max-w-[190px]" title={p.name}>
+                    <span className="text-slate-200 font-semibold truncate max-w-[190px] group-hover/item:text-indigo-400 transition-colors" title={p.name}>
                       {p.name}
                     </span>
                     <span className="text-slate-400 font-mono shrink-0">
@@ -531,7 +544,11 @@ export default function Charts({ filteredRecords, allRecords, theme }: ChartsPro
               .map(([name, data]) => {
                 const isTop = data.sales > 40000000;
                 return (
-                  <div key={name} className="grid grid-cols-[1fr_repeat(3,auto)] gap-2 items-center bg-slate-950/40 p-2 rounded border border-slate-900 text-[11px] text-slate-300 hover:bg-slate-900/60 transition-colors">
+                  <div 
+                    key={name} 
+                    className="grid grid-cols-[1fr_repeat(3,auto)] gap-2 items-center bg-slate-950/40 p-2 rounded border border-slate-900 text-[11px] text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                    onClick={() => handleDrillDown("salesPerson", name)}
+                  >
                     <span className="truncate font-bold text-slate-100" title={name}>{name}</span>
                     <span className="font-mono text-[#34d399] font-bold">{formatBDT(data.sales)}</span>
                     <span className="font-mono text-center px-1">{data.qty}</span>

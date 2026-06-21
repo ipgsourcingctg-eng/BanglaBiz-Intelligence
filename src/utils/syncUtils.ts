@@ -162,7 +162,11 @@ export const syncGoogleSheets = async (
   for (const sheetName of workbook.SheetNames) {
     const worksheet = workbook.Sheets[sheetName];
     ensureCorrectReferenceRange(worksheet);
-    const rawJson = XLSX.utils.sheet_to_json(worksheet) as any[];
+    const initialRawJson = XLSX.utils.sheet_to_json(worksheet) as any[];
+    const rawJson = initialRawJson.filter(row => {
+      const values = Object.values(row).map(v => String(v || "").trim());
+      return values.some(v => v !== "");
+    });
     if (rawJson.length === 0) continue;
 
     const firstRow = rawJson[0];

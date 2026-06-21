@@ -17,7 +17,9 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   Download,
-  Filter
+  Filter,
+  ShieldAlert,
+  Zap
 } from "lucide-react";
 import { utils, writeFile } from "xlsx";
 import { 
@@ -353,6 +355,40 @@ export default function ForecastingPage({ allRecords, funnelRecords, theme, filt
               <span className="font-bold text-amber-400 not-italic mr-1">Strategic Note:</span>
               {forecast.strategicAnalysis}
             </p>
+          </div>
+        )}
+
+        {/* Risk Detection Section */}
+        {forecast?.riskFactors && forecast.riskFactors.length > 0 && (
+          <div className="mt-6">
+            <h4 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2 uppercase tracking-wider">
+              <ShieldAlert className="w-4 h-4 text-rose-400" />
+              AI Risk Detection & Mitigation
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {forecast.riskFactors.map((risk, idx) => (
+                <div key={idx} className="bg-slate-950/40 p-4 rounded-xl border border-rose-500/10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-100 text-sm">{risk.factor}</span>
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                      risk.impact === 'High' ? 'bg-rose-500 text-white' :
+                      risk.impact === 'Medium' ? 'bg-amber-500 text-slate-900' :
+                      'bg-emerald-500 text-slate-900'
+                    }`}>
+                      {risk.impact} Impact
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">{risk.description}</p>
+                  <div className="pt-2 border-t border-slate-800 flex items-start gap-2">
+                    <Zap className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-amber-200/80 font-medium italic">
+                      <span className="font-bold uppercase not-italic mr-1 text-[9px]">Mitigation:</span>
+                      {risk.mitigation}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

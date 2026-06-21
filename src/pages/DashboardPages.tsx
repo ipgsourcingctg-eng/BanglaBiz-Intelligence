@@ -68,6 +68,7 @@ import {
   FunnelRecord,
 } from "../types";
 import Filters from "../components/Filters";
+import GeographicHeatmap from "../components/GeographicHeatmap";
 import { formatBDT, formatDate, normalizeName, getFiscalYear } from "../utils/format";
 import {
   exportDashboardToPdf,
@@ -871,6 +872,9 @@ export function DashboardOverviewPage({
           trend={{ label: "Dynamic Target", positive: true }}
         />
       </div>
+
+      {/* Geographic Heatmap Section */}
+      <GeographicHeatmap records={filteredRecords} theme={theme} />
 
       {/* Executive Briefing Welcome */}
       <div
