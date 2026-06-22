@@ -294,8 +294,9 @@ export default function App() {
       };
 
       const quarter = String(findVal(["Quarter", "Qtr"], "Unassigned"));
-      const sl = findVal(["SL", "Serial"], idx + 1);
-      const date = formatToYmd(findVal(["Date", "Creation Date"], new Date()));
+      const slVal = findVal(["SL", "Serial Number", "Serial", "No", "S.No", "SNo"], null);
+      const sl = slVal !== undefined && slVal !== null && slVal !== "" ? slVal : (idx + 1);
+      const date = formatToYmd(findVal(["Date", "Creation Date"], new Date().toLocaleDateString('en-CA')));
       const leadsRef = String(findVal(["Leads Ref.", "Leads Ref", "Ref", "Reference"], ""));
       const customerName = String(findVal(["Customer Name", "Customer", "Account", "Client"], ""));
       const type = String(findVal(["RFQ/OTM/LTM", "Type", "Category"], "RFQ"));

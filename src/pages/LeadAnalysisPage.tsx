@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { DashboardTheme, LeadAnalysisRecord, SalesRecord } from "../types";
 import { formatBDT, formatDate } from "../utils/format";
+import { formatToYmd } from "../db/localDb";
 import { Activity, Target, Search, BarChart3, TrendingUp, SlidersHorizontal, ChevronRight, ChevronLeft, Plus, Edit, Trash2, X, Cloud, CloudOff, RefreshCw, HelpCircle, CheckCircle, AlertCircle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { pushLeadsToGoogleSheet } from "../utils/syncUtils";
@@ -72,8 +73,8 @@ export default function LeadAnalysisPage({ records, allRecords = [], theme, glob
           return {
             id: r.id || `lead-${idx}`,
             Quarter: String(r.Quarter || ""),
-            SL: Number(r.SL) || (idx + 1),
-            Date: String(r.Date || "").split("T")[0],
+            SL: (r.SL !== undefined && r.SL !== null && r.SL !== "") ? r.SL : (idx + 1),
+            Date: r.Date ? formatToYmd(r.Date) : "",
             "Leads Ref.": String(r["Leads Ref."] || r["Leads Ref"] || ""),
             "Customer Name": String(r["Customer Name"] || r["Customer"] || ""),
             "Type": String(r["RFQ/OTM/LTM"] || r["Type"] || r.type || ""),
@@ -269,6 +270,10 @@ export default function LeadAnalysisPage({ records, allRecords = [], theme, glob
     
     if (normalizedData.Type) {
       normalizedData.Type = normalizedData.Type.trim().toUpperCase();
+    }
+
+    if (normalizedData.Date) {
+      normalizedData.Date = formatToYmd(normalizedData.Date);
     }
 
     let updated: LeadAnalysisRecord[] = [];
@@ -1097,10 +1102,11 @@ export default function LeadAnalysisPage({ records, allRecords = [], theme, glob
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Date</label>
                   <input
-                    type="date"
+                    type="text"
                     value={formData.Date || ""}
+                    placeholder="e.g., 21-Jun-2026"
                     onChange={e => setFormData({ ...formData, Date: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition outline-none"
+                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-4 py-3 text-sm text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition outline-none"
                   />
                 </div>
                 <div>

@@ -307,7 +307,7 @@ export function initializeLocalDb() {
 
     const initialLog: SyncLog = {
       id: "log-init-" + Date.now(),
-      timestamp: new Date().toISOString(),
+      timestamp: getDhakaTimestamp(),
       fileName: "Seed Data",
       recordsCount: INITIAL_SALES_DATA.length,
       status: "success",
@@ -578,124 +578,175 @@ export function saveLocalLeadAnalysisRecords(records: LeadAnalysisRecord[]) {
   );
 }
 
+export function getDhakaTimestamp(): string {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Dhaka",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(new Date());
+    const year = parts.find(p => p.type === "year")?.value || "2026";
+    const month = parts.find(p => p.type === "month")?.value || "06";
+    const day = parts.find(p => p.type === "day")?.value || "22";
+    const hour = parts.find(p => p.type === "hour")?.value || "00";
+    const minute = parts.find(p => p.type === "minute")?.value || "00";
+    const second = parts.find(p => p.type === "second")?.value || "00";
+    return `${year}-${month}-${day} ${hour}:${minute}:${second} GMT+6`;
+  } catch {
+    const d = new Date();
+    const utc = d.getTime() + d.getTimezoneOffset() * 60000;
+    const dhakaDate = new Date(utc + 3600000 * 6);
+    const y = dhakaDate.getFullYear();
+    const m = String(dhakaDate.getMonth() + 1).padStart(2, "0");
+    const day = String(dhakaDate.getDate()).padStart(2, "0");
+    const h = String(dhakaDate.getHours()).padStart(2, "0");
+    const min = String(dhakaDate.getMinutes()).padStart(2, "0");
+    const s = String(dhakaDate.getSeconds()).padStart(2, "0");
+    return `${y}-${m}-${day} ${h}:${min}:${s} GMT+6`;
+  }
+}
+
 export const formatToYmd = (val: any): string => {
   if (!val) return "2026-05-27";
 
-  // If it's already a JS Date
+  let d: Date | null = null;
+
   if (val instanceof Date) {
     if (!isNaN(val.getTime())) {
-      const yyyy = val.getFullYear();
-      const mm = String(val.getMonth() + 1).padStart(2, "0");
-      const dd = String(val.getDate()).padStart(2, "0");
+      d = val;
+    }
+  } else {
+    // If it's a number (Excel date serial number or timestamp)
+    const num = Number(val);
+    if (!isNaN(num)) {
+      // If it looks like an Excel date serial number (e.g. 30000 to 60000 represents dates between 1982 and 2064)
+      if (num > 30000 && num < 60000) {
+        d = new Date(Math.round((num - 25569) * 86400 * 1000));
+      }
+      // If it looks like a Unix timestamp in milliseconds
+      else if (num > 1000000000000 && num < 4000000000000) {
+        d = new Date(num);
+      }
+    }
+
+    if (!d) {
+      let str = String(val).trim();
+      if (!str) return "2026-05-27";
+
+      // 1. Check YYYY-MM-DD format (already perfect)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+        return str;
+      }
+
+      // 2. Check YYYY-MM-DD HH:mm:ss format (take prefix)
+      const ymdPrefixMatch = str.match(/^(\d{4}-\d{2}-\d{2})\b/);
+      if (ymdPrefixMatch) {
+        return ymdPrefixMatch[1];
+      }
+
+      // 3. Check for YYYY/MM/DD
+      const ymdSlashMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/);
+      if (ymdSlashMatch) {
+        const y = ymdSlashMatch[1];
+        const m = ymdSlashMatch[2].padStart(2, "0");
+        const day = ymdSlashMatch[3].padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      }
+
+      // 4. Check for DD-MM-YYYY or DD/MM/YYYY (common BD/UK format)
+      const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/);
+      if (dmyMatch) {
+        const dPart = dmyMatch[1].padStart(2, "0");
+        const mPart = dmyMatch[2].padStart(2, "0");
+        const yPart = dmyMatch[3];
+        let resolvedMonth = mPart;
+        let resolvedDay = dPart;
+        if (parseInt(mPart) > 12 && parseInt(dPart) <= 12) {
+          resolvedMonth = dPart;
+          resolvedDay = mPart;
+        }
+        return `${yPart}-${resolvedMonth}-${resolvedDay}`;
+      }
+
+      // 5. Check for DD-MMM-YYYY or DD-MMM-YY (e.g. 27-May-2026 or 27-May-26 or 27-MAY-2026)
+      const monthsMap: Record<string, string> = {
+        jan: "01",
+        feb: "02",
+        mar: "03",
+        apr: "04",
+        may: "05",
+        jun: "06",
+        jul: "07",
+        aug: "08",
+        sep: "09",
+        oct: "10",
+        nov: "11",
+        dec: "12",
+      };
+      const dMMyMatch = str.match(
+        /^(\d{1,2})[\/\- ]([A-Za-z]{3,9})[\/\- ](\d{2,4})\b/,
+      );
+      if (dMMyMatch) {
+        const dPart = dMMyMatch[1].padStart(2, "0");
+        const monthStr = dMMyMatch[2].toLowerCase().substring(0, 3);
+        const mPart = monthsMap[monthStr] || "05";
+        let yPart = dMMyMatch[3];
+        if (yPart.length === 2) {
+          yPart = "20" + yPart; // Assume 20xx for 2-digit years
+        }
+        return `${yPart}-${mPart}-${dPart}`;
+      }
+
+      // 6. Check if it's an ISO timestamp or similar string containing T
+      if (str.includes("T")) {
+        const parsed = Date.parse(str);
+        if (!isNaN(parsed)) {
+          d = new Date(parsed);
+        }
+      }
+
+      if (!d) {
+        // Native JS Date.parse fallback
+        const parsed = Date.parse(str);
+        if (!isNaN(parsed)) {
+          d = new Date(parsed);
+        }
+      }
+    }
+  }
+
+  if (d && !isNaN(d.getTime())) {
+    try {
+      // Use Bangladesh timezone to recover the local calendar date timezone-agnostically
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Dhaka",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+      const parts = formatter.formatToParts(d);
+      const year = parts.find(p => p.type === "year")?.value || String(d.getUTCFullYear());
+      const month = parts.find(p => p.type === "month")?.value || String(d.getUTCMonth() + 1).padStart(2, "0");
+      const day = parts.find(p => p.type === "day")?.value || String(d.getUTCDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    } catch {
+      // Fallback
+      const yyyy = d.getUTCFullYear();
+      const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const dd = String(d.getUTCDate()).padStart(2, "0");
       return `${yyyy}-${mm}-${dd}`;
     }
   }
 
-  // If it's a number (Excel date serial number or timestamp)
-  const num = Number(val);
-  if (!isNaN(num)) {
-    // If it looks like an Excel date serial number (e.g. 30000 to 60000 represents dates between 1982 and 2064)
-    if (num > 30000 && num < 60000) {
-      const d = new Date(Math.round((num - 25569) * 86400 * 1000));
-      if (!isNaN(d.getTime())) {
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const dd = String(d.getDate()).padStart(2, "0");
-        return `${yyyy}-${mm}-${dd}`;
-      }
-    }
-    // If it looks like a Unix timestamp in milliseconds
-    if (num > 1000000000000 && num < 4000000000000) {
-      const d = new Date(num);
-      if (!isNaN(d.getTime())) {
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const dd = String(d.getDate()).padStart(2, "0");
-        return `${yyyy}-${mm}-${dd}`;
-      }
-    }
-  }
-
-  // Ensure it's a string
-  let str = String(val).trim();
-  if (!str) return "2026-05-27";
-
-  // 1. Check YYYY-MM-DD format (already perfect)
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-    return str;
-  }
-
-  // 2. Check YYYY-MM-DD HH:mm:ss format (take prefix)
-  const ymdPrefixMatch = str.match(/^(\d{4}-\d{2}-\d{2})\b/);
-  if (ymdPrefixMatch) {
-    return ymdPrefixMatch[1];
-  }
-
-  // 3. Check for YYYY/MM/DD
-  const ymdSlashMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/);
-  if (ymdSlashMatch) {
-    const y = ymdSlashMatch[1];
-    const m = ymdSlashMatch[2].padStart(2, "0");
-    const d = ymdSlashMatch[3].padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-
-  // 4. Check for DD-MM-YYYY or DD/MM/YYYY (common BD/UK format)
-  const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/);
-  if (dmyMatch) {
-    const d = dmyMatch[1].padStart(2, "0");
-    const m = dmyMatch[2].padStart(2, "0");
-    const y = dmyMatch[3];
-    let resolvedMonth = m;
-    let resolvedDay = d;
-    if (parseInt(m) > 12 && parseInt(d) <= 12) {
-      resolvedMonth = d;
-      resolvedDay = m;
-    }
-    return `${y}-${resolvedMonth}-${resolvedDay}`;
-  }
-
-  // 5. Check for DD-MMM-YYYY or DD-MMM-YY (e.g. 27-May-2026 or 27-May-26 or 27-MAY-2026)
-  const monthsMap: Record<string, string> = {
-    jan: "01",
-    feb: "02",
-    mar: "03",
-    apr: "04",
-    may: "05",
-    jun: "06",
-    jul: "07",
-    aug: "08",
-    sep: "09",
-    oct: "10",
-    nov: "11",
-    dec: "12",
-  };
-  const dMMyMatch = str.match(
-    /^(\d{1,2})[\/\- ]([A-Za-z]{3,9})[\/\- ](\d{2,4})\b/,
-  );
-  if (dMMyMatch) {
-    const d = dMMyMatch[1].padStart(2, "0");
-    const monthStr = dMMyMatch[2].toLowerCase().substring(0, 3);
-    const m = monthsMap[monthStr] || "05";
-    let y = dMMyMatch[3];
-    if (y.length === 2) {
-      y = "20" + y; // Assume 20xx for 2-digit years
-    }
-    return `${y}-${m}-${d}`;
-  }
-
-  // 6. Native JS Date.parse fallback
-  const parsed = Date.parse(str);
-  if (!isNaN(parsed)) {
-    const d = new Date(parsed);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
   // 7. If still nothing, let's keep it as is if it has some digits, or fallback
-  return str.substring(0, 10);
+  let strFallback = String(val).trim();
+  return strFallback.substring(0, 10) || "2026-05-27";
 };
 
 export function getVatTaxRates(): { vat: number; tax: number } {
@@ -891,7 +942,7 @@ export function saveLocalSalesRecords(
 
     const newLog: SyncLog = {
       id: "log-" + Date.now(),
-      timestamp: new Date().toISOString(),
+      timestamp: getDhakaTimestamp(),
       fileName,
       recordsCount: records.length,
       status: success ? "success" : "warning",
@@ -914,7 +965,7 @@ export function saveLocalSalesRecords(
 
     const failedLog: SyncLog = {
       id: "log-" + Date.now(),
-      timestamp: new Date().toISOString(),
+      timestamp: getDhakaTimestamp(),
       fileName,
       recordsCount: records.length,
       status: "warning",
@@ -991,7 +1042,7 @@ export function clearAndResetDb(): SalesRecord[] {
   // 6. Create database purge log
   const resetLog: SyncLog = {
     id: "log-reset-" + Date.now(),
-    timestamp: new Date().toISOString(),
+    timestamp: getDhakaTimestamp(),
     fileName: "Database Purge",
     recordsCount: 0,
     status: "success",

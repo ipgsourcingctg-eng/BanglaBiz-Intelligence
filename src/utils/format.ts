@@ -92,7 +92,12 @@ export function formatDate(dateStr: string): string {
   if (!dateStr) return "N/A";
   
   try {
-    const [y, m, d] = dateStr.split("-");
+    const parts = dateStr.split("-");
+    // If it's not standard YYYY-MM-DD (e.g. 2026-06-21), bypass and return as-is
+    if (parts.length !== 3 || parts[0].length !== 4 || isNaN(Number(parts[0]))) {
+      return dateStr;
+    }
+    const [y, m, d] = parts;
     const format = getDateFormat();
     
     const day = d.padStart(2, '0');
