@@ -242,8 +242,7 @@ export const syncGoogleSheets = async (
     const currentTotalRows = getSheetTotalRows(worksheet, rawJson.length);
 
     if (sheetType === "sales") {
-      const parsedRecords: SalesRecord[] = rawJson.map((row: any, idx) => {
-        const mapped: any = { No: idx + 1 };
+      const parsedRecords: (SalesRecord | null)[] = rawJson.map((row: any, idx) => {
         const innerKeys = Object.keys(row);
         const findVal = (possibleNames: string[], defaultVal: any = "") => {
           const foundKey = innerKeys.find(k => 
@@ -252,18 +251,36 @@ export const syncGoogleSheets = async (
           return foundKey !== undefined ? row[foundKey] : defaultVal;
         };
 
+        const buyer = findVal(["Buyer", "Client", "Customer", "Customers"], "");
+        const invoice = findVal(["Invoice", "Inv"], "");
+        const totalPriceInput = findVal(["Total Price", "Total", "Grand Total", "Amount"], null);
+        
+        const invoiceDateRaw = findVal(["Invoice Date", "InvoiceDate"], "");
+        const salesDateRaw = findVal(["Sales Date", "SalesDate"], "");
+        
+        // Validation: If no buyer, no invoice, no price AND no dates, skip it.
+        // Also skip if it completely lacks a date, as it's likely junk data.
+        if (!invoiceDateRaw && !salesDateRaw) {
+          return null;
+        }
+
+        if (!buyer && !invoice && (totalPriceInput === null || parseNumeric(totalPriceInput) === 0)) {
+          return null;
+        }
+
+        const mapped: any = { No: idx + 1 };
         mapped.Branch = findVal(["Branch", "Outlet", "Location"], "Unassigned");
         mapped["Sales Person"] = findVal(["Sales Person", "SalesPerson", "Seller", "Account Manager"], "Unassigned");
         mapped["Buyer Group"] = findVal(["Buyer Group", "BuyerGroup", "Industry", "Segment"], "Telecom");
         mapped["Sales Order"] = findVal(["Sales Order", "SalesOrder", "SO"], `SO-WEB-${100 + idx}`);
-        mapped.Invoice = findVal(["Invoice", "Inv"], `INV-WEB-${1000 + idx}`);
+        mapped.Invoice = invoice || `INV-WEB-${1000 + idx}`;
         mapped.Remarks = findVal(["Remarks", "Notes"], "Google Sheets Live Sync");
-        mapped.Buyer = findVal(["Buyer", "Client", "Customer", "Customers"], "Enterprise Client");
+        mapped.Buyer = buyer || "Enterprise Client";
         mapped.Brand = findVal(["Brand", "Manufacturer", "Vendor"], "Fortinet");
         mapped.Group = findVal(["Group", "Category"], "Security");
         mapped.Product = findVal(["Product", "Asset"], "Enterprise Core Hub");
         mapped.Quantity = parseNumeric(findVal(["Quantity", "Qty"], 1), 1);
-        mapped["Unit Price"] = parseNumeric(findVal(["Unit Price", "UnitPrice"], 150000), 150000);
+        mapped["Unit Price"] = parseNumeric(findVal(["Unit Price", "UnitPrice"], 0), 0);
         
         const modeVal = String(findVal(["VAT Mode", "Tax Mode", "Mode", "Customization"], "both")).toLowerCase();
         let mode: "excl-both" | "only-vat" | "only-tax" | "both" = "both";
@@ -282,18 +299,19 @@ export const syncGoogleSheets = async (
         mapped.Tax = existingTax !== null ? parseNumeric(existingTax) : Math.round(mapped["Exclude Vat Tax"] * 0.05);
         
         mapped["Vat & Tax"] = mapped.Vat + mapped.Tax;
-        mapped["Total Price"] = mapped["Exclude Vat Tax"] + mapped["Vat & Tax"];
+        mapped["Total Price"] = totalPriceInput !== null ? parseNumeric(totalPriceInput) : (mapped["Exclude Vat Tax"] + mapped["Vat & Tax"]);
         
-        mapped["Invoice Date"] = formatToYmd(findVal(["Invoice Date", "InvoiceDate"], "2026-05-27"));
-        mapped["Sales Date"] = formatToYmd(findVal(["Sales Date", "SalesDate"], "2026-05-27"));
+        mapped["Invoice Date"] = formatToYmd(invoiceDateRaw);
+        mapped["Sales Date"] = formatToYmd(salesDateRaw);
         mapped["Product Manager"] = findVal(["Product Manager", "PM"], "Farzana Ahmed");
 
         return mapped as SalesRecord;
       });
 
-      accumulatedSalesRecords = [...accumulatedSalesRecords, ...parsedRecords];
+      const actualRecords = parsedRecords.filter((r): r is SalesRecord => r !== null);
+      accumulatedSalesRecords = [...accumulatedSalesRecords, ...actualRecords];
       defaultSalesName = sheetName || "Google Live Sales";
-      parsedSalesCount += parsedRecords.length;
+      parsedSalesCount += actualRecords.length;
       totalSalesCount += currentTotalRows;
 
     } else if (sheetType === "collection" && onImportCollections) {

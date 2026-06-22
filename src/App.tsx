@@ -67,6 +67,7 @@ import ForecastingPage from "./pages/ForecastingPage";
 export interface DashboardFilters {
   dateRange: [string, string];
   years: number[];
+  months?: number[];
   branch: string[];
   salesPerson: string[];
   buyerGroup: string[];
@@ -88,6 +89,7 @@ const getDefaultFilters = (records: SalesRecord[]): DashboardFilters => {
   return {
     dateRange: [`${currentYear}-01-01`, `${currentYear}-12-31`],
     years: [currentYear],
+    months: [],
     branch: [],
     salesPerson: [],
     buyerGroup: [],
@@ -545,6 +547,15 @@ export default function App() {
         }
       }
 
+      if (filters.months && filters.months.length > 0) {
+        if (rowDate) {
+          const rowMonth = new Date(rowDate).getMonth() + 1;
+          if (!filters.months.includes(rowMonth)) return false;
+        } else {
+          return false;
+        }
+      }
+
       if (filters.dateRange[0]) {
         if (rowDate && rowDate < filters.dateRange[0]) return false;
       }
@@ -586,6 +597,15 @@ export default function App() {
         if (rowDate) {
           const rowYear = new Date(rowDate).getFullYear();
           if (!filters.years.includes(rowYear)) return false;
+        } else {
+          return false;
+        }
+      }
+
+      if (filters.months && filters.months.length > 0) {
+        if (rowDate) {
+          const rowMonth = new Date(rowDate).getMonth() + 1;
+          if (!filters.months.includes(rowMonth)) return false;
         } else {
           return false;
         }
@@ -670,6 +690,17 @@ export default function App() {
         const startYear = new Date(f.startDate).getFullYear();
         const endYear = new Date(f.endDate).getFullYear();
         if (!filters.years.includes(startYear) && !filters.years.includes(endYear)) return false;
+      }
+
+      if (filters.months && filters.months.length > 0) {
+        const startMonth = new Date(f.startDate).getMonth() + 1;
+        const endMonth = new Date(f.endDate).getMonth() + 1;
+        
+        // Simple check: does startMonth or endMonth fall in selected months?
+        // For longer durations this might miss mid-months, but for most funnel records this is sufficient.
+        const startMatch = filters.months.includes(startMonth);
+        const endMatch = filters.months.includes(endMonth);
+        if (!startMatch && !endMatch) return false;
       }
 
       if (filters.dateRange[0]) {

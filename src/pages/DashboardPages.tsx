@@ -422,7 +422,8 @@ export const getBranchTargets = (
 
       if (target === undefined || target === null || target === 0) {
         const baseTarget = totals.actual * 1.15;
-        target = Math.max(1000000, Math.ceil(baseTarget / 500000) * 500000);
+        const scale = filters?.dateRange?.[0] && filters?.dateRange?.[1] ? getTargetScaleFactor(yearsInFiltered[0] || new Date().getFullYear(), filters.dateRange[0], filters.dateRange[1]) : 1.0;
+        target = Math.max(1000000 * scale, Math.ceil(baseTarget / 500000) * 500000);
       }
 
       // USER REQUIREMENT: Collection Target = Total Actual Sales in that Year
@@ -587,7 +588,8 @@ export const getRepresentativeTargets = (
 
       if (target === undefined || target === null || target === 0) {
         const baseTarget = totals.actual * 1.12;
-        target = Math.max(500000, Math.ceil(baseTarget / 250000) * 250000);
+        const scale = filters?.dateRange?.[0] && filters?.dateRange?.[1] ? getTargetScaleFactor(yearsInFiltered[0] || new Date().getFullYear(), filters.dateRange[0], filters.dateRange[1]) : 1.0;
+        target = Math.max(500000 * scale, Math.ceil(baseTarget / 250000) * 250000);
       }
 
       // USER REQUIREMENT: Collection Target = Total Actual Sales in that Year
@@ -1187,16 +1189,53 @@ export function SalesAnalyticsPage({
     }
   }
 
-  // Calculate targets specifically based on the filtered records for the active selected year.
-  // Using filteredRecords instead of allRecords guarantees targets align with the selected year!
+  // Calculate targets specifically based on the filtered records for the KPIs (respecting date range filters)
   const branchTargets = getBranchTargets(filteredRecords, filteredCollectionRecords, filters);
-  const nationalTarget = branchTargets.reduce((sum, b) => sum + b.target, 0);
-  const monthlyTarget = nationalTarget / 12;
+  
+  // FIXED: Calculate a fixed yearly target for the benchmark chart (ignoring sub-year sub-filters)
+  // This ensures that Jan, Feb, Mar, etc. bars show 1/12th of the ANNUAL goal even during a Q2 drill-down.
+  const annualEntities = getYearlyEntityTargets("Branch").filter(t => t.year === currentYear);
+  const standardAnnualTarget = annualEntities.reduce((sum, ent) => sum + (ent.totalTarget || 0), 0);
+  
+  // Also calculate from records for branches WITHOUT explicit targets (115% rule)
+  const yearlyRecords = allRecords.filter(r => {
+    const dStr = r["Invoice Date"] || r["Sales Date"] || "";
+    if (!dStr) return false;
+    return dStr.startsWith(String(currentYear));
+  });
+  
+  // We use getBranchTargets WITHOUT filters to get the total annual baseline
+  const yearlyBranchTargets = getBranchTargets(yearlyRecords, [], undefined);
+  const totalAnnualSalesGoalFromRecords = yearlyBranchTargets.reduce((s, b) => s + b.target, 0);
+  
+  // Use explicit target if available, otherwise fallback to records-based goal
+  const finalAnnualGoal = Math.max(standardAnnualTarget, totalAnnualSalesGoalFromRecords);
+  
+  const hasSpecificMonthlyTargets = annualEntities.some(t => t.monthlyBreakdown && t.monthlyBreakdown.length > 0);
 
   const months = getMonthsList();
 
   const chartData = months.map((monthName, index) => {
     const monthNum = index + 1;
+    
+    // Calculate precise target for this specific month
+    let targetForThisMonth = 0;
+    if (hasSpecificMonthlyTargets) {
+      annualEntities.forEach(ent => {
+        if (ent.monthlyBreakdown && ent.monthlyBreakdown.length > 0) {
+          const mb = ent.monthlyBreakdown.find(m => m.month === monthNum);
+          targetForThisMonth += mb ? (mb.sales || 0) : ((ent.totalTarget || 0) / 12);
+        } else {
+          targetForThisMonth += (ent.totalTarget || 0) / 12;
+        }
+      });
+    }
+
+    // Fallback if no specific breakdowns found (or if sum was 0)
+    if (targetForThisMonth === 0) {
+      targetForThisMonth = finalAnnualGoal / 12;
+    }
+
     const monthRecords = visibleRecords.filter((r) => {
       const dateVal = r["Invoice Date"] || r["Sales Date"] || "";
       if (!dateVal) return false;
@@ -1231,7 +1270,7 @@ export function SalesAnalyticsPage({
       name: monthName,
       sales: Math.round(sales),
       collection: Math.round(collection),
-      target: Math.round(monthlyTarget),
+      target: Math.round(targetForThisMonth),
     };
   });
 
@@ -1243,7 +1282,7 @@ export function SalesAnalyticsPage({
     (sum, c) => sum + c.amountCollected,
     0
   );
-  const totalSalesTarget = nationalTarget;
+  const totalSalesTarget = branchTargets.reduce((sum, b) => sum + b.target, 0);
   // Collection target is equal to total actual sales
   const totalCollectionTarget = totalSalesActual;
 
