@@ -337,22 +337,28 @@ Do not return any conversational text, only the raw JSON.
 
 // 2.6. Interactive AI Financial Advisor (Chat Interface)
 app.post("/api/ai-chat", async (req, res) => {
-  const { messages, dataSummary } = req.body;
+  const { messages, dataSummary, allRecords, funnelRecords, modelName } = req.body;
 
   try {
     const ai = getGeminiClient();
     const chat = ai.chats.create({
-      model: "gemini-3.5-flash",
+      model: modelName || "gemini-3.5-flash",
       config: {
         systemInstruction: `You are 'SalesPulse Advisor', an elite AI Financial Consultant for a technology distribution company in Bangladesh. 
         You have access to real-time sales, collection, and funnel data. 
         Your tone is professional, helpful, and highly analytical. 
-        When asked about data, refer to the provided 'Current Data Summary'.
+        When asked about data, refer to the provided 'Current Data Summary', 'Sales Records', and 'Funnel Records'.
         All currency is in BDT (৳). Use terms like Lakhs (L) and Crores (Cr).
         Keep responses concise and visually structured (use markdown).
         
         Current Data Summary:
-        ${JSON.stringify(dataSummary)}`
+        ${JSON.stringify(dataSummary)}
+        
+        Sales Records:
+        ${JSON.stringify(allRecords)}
+        
+        Funnel Records:
+        ${JSON.stringify(funnelRecords)}`
       },
       history: messages.slice(0, -1).map((m: any) => ({
         role: m.role === "user" ? "user" : "model",

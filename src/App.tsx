@@ -774,41 +774,25 @@ export default function App() {
     });
   };
 
-  // Export handlers
-  const handleDownloadPdfReport = async () => {
-    const mainDashboardId = "executive-reporting-boundaries";
-    await exportDashboardToPdf(mainDashboardId, "SalesPulse_CFO_Audit_Report");
-  };
-
-  const handleDownloadPresentationSlides = () => {
-    // Collect active metrics for slides template
+  const getExportData = () => {
     const totals = {
       revenue: filteredRecords.reduce((sum, r) => sum + r["Total Price"], 0),
-      netSales: filteredRecords.reduce(
-        (sum, r) => sum + r["Exclude Vat Tax"],
-        0,
-      ),
+      netSales: filteredRecords.reduce((sum, r) => sum + r["Exclude Vat Tax"], 0),
       orders: filteredRecords.length,
       quantity: filteredRecords.reduce((sum, r) => sum + r.Quantity, 0),
       vatTax: filteredRecords.reduce((sum, r) => sum + r["Vat & Tax"], 0),
       activeBuyers: new Set(filteredRecords.map((r) => r.Buyer)).size,
     };
 
-    // Calculate branch breakdown % for slides
     const branchMap: Record<string, number> = {};
     filteredRecords.forEach((r) => {
       branchMap[r.Branch] = (branchMap[r.Branch] || 0) + r["Total Price"];
     });
     const grandSal = Object.values(branchMap).reduce((s, v) => s + v, 0) || 1;
     const branchBreakdown = Object.entries(branchMap)
-      .map(([name, sales]) => ({
-        name,
-        sales,
-        percent: (sales / grandSal) * 100,
-      }))
+      .map(([name, sales]) => ({ name, sales, percent: (sales / grandSal) * 100 }))
       .sort((a, b) => b.sales - a.sales);
 
-    // Calculate product aggregates for slides
     const prodMap: Record<string, { qty: number; sales: number }> = {};
     filteredRecords.forEach((r) => {
       const curr = prodMap[r.Product] || { qty: 0, sales: 0 };
@@ -818,13 +802,21 @@ export default function App() {
       };
     });
     const topProducts = Object.entries(prodMap)
-      .map(([name, meta]) => ({
-        name,
-        sales: meta.sales,
-        quantity: meta.qty,
-      }))
+      .map(([name, meta]) => ({ name, sales: meta.sales, quantity: meta.qty }))
       .sort((a, b) => b.sales - a.sales);
 
+    return { totals, branchBreakdown, topProducts };
+  };
+
+  // Export handlers
+  const handleDownloadPdfReport = async () => {
+    const { totals, branchBreakdown, topProducts } = getExportData();
+    const mainDashboardId = "executive-reporting-boundaries";
+    await exportDashboardToPdf(mainDashboardId, "SalesPulse_CFO_Audit_Report", filteredRecords, totals, branchBreakdown, topProducts);
+  };
+
+  const handleDownloadPresentationSlides = () => {
+    const { totals, branchBreakdown, topProducts } = getExportData();
     exportDashboardToSlides(
       filteredRecords,
       totals,
@@ -1115,7 +1107,12 @@ export default function App() {
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} theme={theme} />
 
       {/* AI Financial Advisor Chat Interface */}
-      <AiAdvisor dataSummary={summaryData} theme={theme} />
+      <AiAdvisor 
+        dataSummary={summaryData} 
+        allRecords={allRecords}
+        funnelRecords={funnelRecords}
+        theme={theme} 
+      />
     </div>
   );
 }

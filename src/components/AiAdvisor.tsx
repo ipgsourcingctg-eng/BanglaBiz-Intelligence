@@ -21,17 +21,20 @@ interface Message {
 
 interface AiAdvisorProps {
   dataSummary: any;
+  allRecords?: any[];
+  funnelRecords?: any[];
   theme: { isDark: boolean };
 }
 
-export const AiAdvisor: React.FC<AiAdvisorProps> = ({ dataSummary, theme }) => {
+export const AiAdvisor: React.FC<AiAdvisorProps> = ({ dataSummary, allRecords, funnelRecords, theme }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [input, setInput] = useState("");
+  const [selectedModel, setSelectedModel] = useState("gemini-3.5-flash");
   const [messages, setMessages] = useState<Message[]>([
     { 
       role: "assistant", 
-      content: "Hello! I am your **SalesPulse AI Advisor**. I've analyzed your current sales and funnel data. How can I assist you with your business strategy today?" 
+      content: "Hello! I am your **SalesPulse AI Advisor**. I now have access to your full database of sales and funnel records. How can I assist you with your queries today?" 
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,7 +64,10 @@ export const AiAdvisor: React.FC<AiAdvisorProps> = ({ dataSummary, theme }) => {
             role: m.role === "user" ? "user" : "model",
             content: m.content
           })),
-          dataSummary
+          dataSummary,
+          allRecords,
+          funnelRecords,
+          modelName: selectedModel
         })
       });
 
@@ -195,9 +201,24 @@ export const AiAdvisor: React.FC<AiAdvisorProps> = ({ dataSummary, theme }) => {
                   <Send size={18} />
                 </button>
               </div>
-              <p className="text-[10px] text-slate-500 mt-2 text-center">
-                Powered by Gemini 3.5 Flash &bull; Real-time BI Engine
-              </p>
+              <div className="flex items-center justify-between mt-3 text-[10px] text-slate-500">
+                <div className="flex items-center gap-1.5">
+                  <span>Model:</span>
+                  <select 
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className={`bg-transparent outline-none cursor-pointer ${
+                      theme.isDark ? "text-slate-300" : "text-slate-700"
+                    }`}
+                  >
+                    <option value="gemini-3.5-flash">Gemini 3.5 Flash (Fast/Free)</option>
+                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Fastest)</option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (Reasoning)</option>
+                  </select>
+                </div>
+                <span>Real-time BI Engine</span>
+              </div>
             </div>
           </motion.div>
         )}
