@@ -164,6 +164,7 @@ export interface FunnelRecord {
   amount: number;
   status: string;
   SL?: number;
+  isSoftwareRenewal?: boolean;
 }
 
 export interface CustomBuyerGroup {

@@ -33,6 +33,7 @@ import {
   formatToYmd,
   getLocalCollectionRecords,
   getCustomBuyerGroups,
+  getYearlyEntityTargets,
 } from "./db/localDb";
 import { CUSTOM_THEMES } from "./utils/theme";
 import { syncGoogleSheets } from "./utils/syncUtils";
@@ -201,7 +202,34 @@ export default function App() {
     name: string,
     customLogMessage?: string
   ) => {
-    const success = saveLocalSalesRecords(newRecords, source, name, customLogMessage);
+    // Enforce existing KAM names for Sales Records
+    const existingKams = getYearlyEntityTargets("KAM").map(t => t.entityName);
+    const defaultKam = existingKams.length > 0 ? existingKams[0] : "Unassigned";
+
+    const normalizedRecords = newRecords.map(r => {
+      let salesman = String(r["Sales Person"] || "").trim();
+      
+      // Specific hardcoded mapping requested by user
+      const upperSalesman = salesman.toUpperCase();
+      if (upperSalesman === "M. A. RAHMAN" || upperSalesman === "M A RAHMAN") {
+        salesman = "Md. Mahbub Alam";
+      }
+
+      if (existingKams.length > 0) {
+        const match = existingKams.find(k => k.toLowerCase() === salesman.toLowerCase());
+        if (match) {
+          r["Sales Person"] = match;
+        } else {
+          // If no match found, assign to the default (first) KAM to avoid creating new names
+          r["Sales Person"] = defaultKam;
+        }
+      } else {
+        r["Sales Person"] = salesman;
+      }
+      return r;
+    });
+
+    const success = saveLocalSalesRecords(normalizedRecords, source, name, customLogMessage);
     if (success) {
       const refreshedRecords = getLocalSalesRecords();
       setAllRecords(refreshedRecords);
@@ -235,6 +263,11 @@ export default function App() {
       const values = Object.values(r).map(v => String(v || "").trim());
       return values.some(v => v !== "");
     });
+
+    // Get existing KAMs to validate salesman names
+    const existingKams = getYearlyEntityTargets("KAM").map(t => t.entityName);
+    const defaultKam = existingKams.length > 0 ? existingKams[0] : "Unassigned";
+
     const parsed = cleaned.map((r, idx) => {
       const keys = Object.keys(r);
       const findVal = (possibleNames: string[], defaultVal: any = "") => {
@@ -245,7 +278,24 @@ export default function App() {
       };
 
       const partner = findVal(["Partners", "Partner", "Client", "Customer", "Buyer"], "Unknown");
-      const salesman = findVal(["Salesman", "Sales Person", "SalesPerson", "KAM", "Representative"], "Unknown");
+      let salesman = String(findVal(["Salesman", "Sales Person", "SalesPerson", "KAM", "Representative"], "Unknown")).trim();
+      
+      // Specific hardcoded mapping requested by user
+      const upperSalesman = salesman.toUpperCase();
+      if (upperSalesman === "M. A. RAHMAN" || upperSalesman === "M A RAHMAN") {
+        salesman = "Md. Mahbub Alam";
+      }
+
+      // Enforce existing KAM names: if not found, assign to defaultKam
+      if (existingKams.length > 0) {
+        const match = existingKams.find(k => k.toLowerCase() === salesman.toLowerCase());
+        if (match) {
+          salesman = match;
+        } else {
+          salesman = defaultKam;
+        }
+      }
+
       const quarter = findVal(["Quarter", "Qtr"], "2026 Q2");
       const startDate = formatToYmd(findVal(["Start Date", "StartDate", "Date"], "2026-05-21"));
       const endDate = formatToYmd(findVal(["End Date", "EndDate"], "2026-06-05"));
@@ -423,6 +473,76 @@ export default function App() {
       }
     }
   };
+
+  useEffect(() => {
+    // 1. Migrate Sales Records
+    const salesRaw = safeLocalStorage.getItem("salespulse_sales_records_v1");
+    if (salesRaw) {
+      try {
+        const sales = JSON.parse(salesRaw);
+        let changed = false;
+        const migrated = sales.map((r: any) => {
+          const owner = String(r["Sales Person"] || "").toUpperCase();
+          if (owner === "M. A. RAHMAN" || owner === "M A RAHMAN") {
+            r["Sales Person"] = "Md. Mahbub Alam";
+            changed = true;
+          }
+          return r;
+        });
+        if (changed) {
+          safeLocalStorage.setItem("salespulse_sales_records_v1", JSON.stringify(migrated));
+          setAllRecords(migrated);
+        }
+      } catch (e) {
+        console.error("Sales migration failed", e);
+      }
+    }
+
+    // 2. Migrate Funnel Records
+    const funnelRaw = safeLocalStorage.getItem("salespulse_funnel_records_v1");
+    if (funnelRaw) {
+      try {
+        const funnels = JSON.parse(funnelRaw);
+        let changed = false;
+        const migrated = funnels.map((r: any) => {
+          const owner = String(r.salesman || "").toUpperCase();
+          if (owner === "M. A. RAHMAN" || owner === "M A RAHMAN") {
+            r.salesman = "Md. Mahbub Alam";
+            changed = true;
+          }
+          return r;
+        });
+        if (changed) {
+          safeLocalStorage.setItem("salespulse_funnel_records_v1", JSON.stringify(migrated));
+        }
+      } catch (e) {
+        console.error("Funnel migration failed", e);
+      }
+    }
+
+    // 3. Migrate Software Subscriptions
+    const swRaw = safeLocalStorage.getItem("salespulse_sw_subscriptions_v1");
+    if (swRaw) {
+      try {
+        const subs = JSON.parse(swRaw);
+        let changed = false;
+        const migrated = subs.map((r: any) => {
+          const owner = String(r.sales_owner || "").toUpperCase();
+          if (owner === "M. A. RAHMAN" || owner === "M A RAHMAN") {
+            r.sales_owner = "Md. Mahbub Alam";
+            changed = true;
+          }
+          return r;
+        });
+        if (changed) {
+          safeLocalStorage.setItem("salespulse_sw_subscriptions_v1", JSON.stringify(migrated));
+          window.dispatchEvent(new Event("salespulse_sw_subscriptions_updated"));
+        }
+      } catch (e) {
+        console.error("Software migration failed", e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     // Auto-sync

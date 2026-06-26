@@ -199,7 +199,7 @@ function parseSeedSubscriptions(): SoftwareSubscription[] {
       renewal_stage: renewalStage,
       renewal_probability: prob,
       status: status,
-      sales_owner: "M. A. Rahman",
+      sales_owner: "Md. Mahbub Alam",
       competitor: "",
       remarks: remarksParts.join(" | ") || "Imported contract config details fully matched",
       created_at: new Date().toISOString(),

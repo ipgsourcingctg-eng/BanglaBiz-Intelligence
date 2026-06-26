@@ -28,10 +28,11 @@ import {
   Settings2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { FunnelRecord, DashboardTheme } from "../types";
 import { formatBDT } from "../utils/format";
 import { saveLocalFunnelRecords } from "../db/localDb";
+import { getSubscriptions } from "./software/store";
 
 interface FunnelPageProps {
   funnelRecords: FunnelRecord[];
@@ -51,7 +52,13 @@ const STATUS_OPTIONS = [
   "Strategic Account",
   "Challenge",
   "Cancelled",
-  "Lost"
+  "Lost",
+  "Not Started",
+  "Customer Contacted",
+  "Quotation Sent",
+  "Negotiation",
+  "PO Expected",
+  "PO Received"
 ].sort();
 
 const QUARTER_OPTIONS = [
@@ -68,7 +75,88 @@ export default function FunnelPage({
   onUpdateFunnelRecords,
   theme
 }: FunnelPageProps) {
-  const displayRecords = filteredFunnelRecords || funnelRecords;
+  // Days Remaining calculation helper
+  const getDaysRemaining = (expiryDateStr: string) => {
+    if (!expiryDateStr) return 0;
+    const expiry = new Date(expiryDateStr);
+    const today = new Date();
+    const diffTime = expiry.getTime() - today.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  // Dynamically load software renewals as new scopes
+  const softwareRenewals = useMemo(() => {
+    try {
+      const subs = getSubscriptions();
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const endOfYear = new Date(currentYear, 11, 31, 23, 59, 59);
+
+      const activeSubs = subs.filter(s => {
+        // Exclude completed or lost renewals
+        if (s.renewal_stage === "Renewed" || s.renewal_stage === "Lost") {
+          return false;
+        }
+
+        // Exclude Expired records
+        if (s.status === "Expired") return false;
+
+        if (s.expires_on) {
+          const expiryDate = new Date(s.expires_on);
+          if (isNaN(expiryDate.getTime())) return false;
+          
+          // Only include renewals from today up to December 31st of the current year
+          // This excludes past renewals (expired) and future years (next year)
+          if (expiryDate < now || expiryDate > endOfYear) {
+            return false;
+          }
+        } else {
+          return false;
+        }
+
+        return true;
+      });
+
+      return activeSubs.map((s) => {
+        let qtr = `${currentYear} Q2`;
+        if (s.expires_on) {
+          const date = new Date(s.expires_on);
+          if (!isNaN(date.getTime())) {
+            const y = date.getFullYear();
+            const m = date.getMonth();
+            const q = Math.floor(m / 3) + 1;
+            qtr = `${y} Q${q}`;
+          }
+        }
+
+        return {
+          id: `sw-renew-${s.id}`,
+          partner: s.account_name,
+          salesman: s.sales_owner || "Md. Mahbub Alam",
+          quarter: qtr,
+          startDate: s.activated_on,
+          endDate: s.expires_on,
+          brand: s.brand_oem,
+          amount: s.total_value,
+          status: s.renewal_stage,
+          isSoftwareRenewal: true
+        } as FunnelRecord;
+      });
+    } catch (e) {
+      console.error("Failed to load software subscriptions on Funnels page:", e);
+      return [];
+    }
+  }, []);
+
+  const [showSoftwareRenewals, setShowSoftwareRenewals] = useState(true);
+
+  const displayRecords = useMemo(() => {
+    const base = filteredFunnelRecords || funnelRecords;
+    if (showSoftwareRenewals) {
+      return [...base, ...softwareRenewals];
+    }
+    return base;
+  }, [filteredFunnelRecords, funnelRecords, softwareRenewals, showSoftwareRenewals]);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -98,10 +186,12 @@ export default function FunnelPage({
   const [visibleColumns, setVisibleColumns] = useState({
     sl: true,
     partner: true,
+    salesman: true,
+    quarter: true,
+    startDate: true,
+    endDate: true,
     brand: true,
     amount: true,
-    kam: true,
-    timeline: true,
     status: true,
     actions: true
   });
@@ -230,29 +320,148 @@ export default function FunnelPage({
     setTargetRecord(null);
   };
 
-  // Exporters
-  const handleExportExcel = () => {
+  // Unified Exporter
+  const handleUnifiedExport = () => {
     if (filteredRecords.length === 0) return;
-    
-    // Headers matching the "google import format" supported by handleImportFunnels in App.tsx
-    const worksheetData = filteredRecords.map((r, index) => ({
+
+    const workbook = XLSX.utils.book_new();
+
+    // Helper for styling and autofit
+    const prepareWorksheet = (data: any[]) => {
+      const ws = XLSX.utils.json_to_sheet(data, { cellDates: true });
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+
+      for (let R = range.s.r; R <= range.e.r; ++R) {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+          if (!ws[cellRef]) continue;
+
+          ws[cellRef].s = {
+            font: { name: "Calibri", sz: 11 },
+            alignment: { vertical: "center" }
+          };
+
+          if (R === 0) {
+            ws[cellRef].s = {
+              fill: { fgColor: { rgb: "FFFF00" } },
+              font: { bold: true, name: "Calibri", sz: 11 },
+              alignment: { horizontal: "center", vertical: "center" },
+              border: {
+                top: { style: "thin" }, bottom: { style: "thin" },
+                left: { style: "thin" }, right: { style: "thin" }
+              }
+            };
+          } else {
+            const headerCellRef = XLSX.utils.encode_cell({ r: 0, c: C });
+            const headerText = ws[headerCellRef]?.v;
+
+            if (["SL", "Start Date", "End Date", "Brand", "Quarter", "Status", "Assets"].includes(headerText)) {
+              ws[cellRef].s.alignment.horizontal = "center";
+            }
+
+            if (headerText === "Amount") {
+              ws[cellRef].z = "#,##0.00";
+              ws[cellRef].s.alignment.horizontal = "right";
+            }
+
+            if (headerText === "Start Date" || headerText === "End Date") {
+              ws[cellRef].z = "dd-mmm-yyyy";
+            }
+          }
+        }
+      }
+
+      // Autofit columns
+      if (data.length > 0) {
+        const headers = Object.keys(data[0]);
+        ws['!cols'] = headers.map(header => {
+          let maxLen = header.length;
+          data.forEach(row => {
+            const val = (row as any)[header];
+            let len = 0;
+            if (val instanceof Date) {
+              len = 12; // dd-mmm-yyyy with extra space
+            } else if (typeof val === "number" && header === "Amount") {
+              len = val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).length;
+            } else {
+              len = val ? String(val).length : 0;
+            }
+            if (len > maxLen) maxLen = len;
+          });
+          
+          let wch = maxLen + 6;
+          if (header === "Start Date" || header === "End Date") wch = 16;
+          if (header === "Amount") wch = Math.max(wch, 14);
+
+          return { wch: Math.min(wch, 50) };
+        });
+      }
+      return ws;
+    };
+
+    // 1. Create Full Export Sheet
+    const fullData = filteredRecords.map((r, index) => ({
       "SL": r.SL !== undefined ? r.SL : (index + 1),
       "Partner": r.partner,
       "Salesman": r.salesman,
       "Quarter": r.quarter,
-      "Start Date": r.startDate,
-      "End Date": r.endDate,
+      "Start Date": r.startDate ? new Date(r.startDate) : null,
+      "End Date": r.endDate ? new Date(r.endDate) : null,
       "Brand": r.brand,
       "Amount": r.amount,
       "Status": r.status
     }));
+    XLSX.utils.book_append_sheet(workbook, prepareWorksheet(fullData), "Full Funnel");
 
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Funnel");
-    
-    XLSX.writeFile(workbook, "Sales_Funnel_Export.xlsx");
+    // 2. Create Brand-wise Sheets
+    const allowedStatuses = [
+      "New", "Not Started", "Submitted", "Re-Tender[Revised Price", 
+      "Opportunity (50%-60 %)", "Negotiation", "Commit", "Challenge", 
+      "PO Expected", "PO Received"
+    ];
+
+    const brandGroups: Record<string, { display: string; records: FunnelRecord[] }> = {};
+    filteredRecords.filter(r => allowedStatuses.includes(r.status)).forEach(r => {
+      const brands = (r.brand || "Other").split(/[,/&]/).map(b => b.trim()).filter(Boolean);
+      const targetBrands = brands.length > 0 ? brands : ["Other"];
+
+      targetBrands.forEach(brand => {
+        const key = brand.toUpperCase();
+        if (!brandGroups[key]) {
+          brandGroups[key] = { display: brand, records: [] };
+        }
+        brandGroups[key].records.push(r);
+      });
+    });
+
+    Object.keys(brandGroups).sort().forEach(key => {
+      const { display, records } = brandGroups[key];
+      const brandData = records.map((r, index) => ({
+        "SL": index + 1,
+        "Partner": r.partner || "",
+        "Salesman": r.salesman || "",
+        "Quarter": r.quarter || "",
+        "Start Date": r.startDate ? new Date(r.startDate) : null,
+        "End Date": r.endDate ? new Date(r.endDate) : null,
+        "Brand": display, 
+        "Amount": r.amount || 0,
+        "Status": r.status || ""
+      }));
+
+      const safeSheetName = display.replace(/[\[\]\*\?\/\:\\\x00-\x1F]/g, "").trim().substring(0, 31) || "Brand";
+      let finalName = safeSheetName;
+      let counter = 1;
+      while (workbook.SheetNames.some(name => name.toLowerCase() === finalName.toLowerCase())) {
+        const suffix = ` (${counter})`;
+        finalName = safeSheetName.substring(0, 31 - suffix.length) + suffix;
+        counter++;
+      }
+      XLSX.utils.book_append_sheet(workbook, prepareWorksheet(brandData), finalName);
+    });
+
+    XLSX.writeFile(workbook, "Funnel_Consolidated_Export.xlsx");
   };
+
 
   // Base filtering logic (excluding status & stage filters for overall visual fidelity)
   const baseFilteredRecords = useMemo(() => {
@@ -288,7 +497,7 @@ export default function FunnelPage({
     const brackets = [
       { 
         name: "1. New / Cold Leads", 
-        statuses: ["New"], 
+        statuses: ["New", "Not Started"], 
         color: "from-blue-600/80 to-blue-900/40", 
         borderColor: "border-blue-500/50",
         glow: "shadow-blue-500/20",
@@ -298,7 +507,7 @@ export default function FunnelPage({
       },
       { 
         name: "2. Active Evaluation / Ongoing", 
-        statuses: ["Ongoing", "Strategic Account"], 
+        statuses: ["Ongoing", "Strategic Account", "Customer Contacted", "Quotation Sent"], 
         color: "from-cyan-600/80 to-cyan-900/40", 
         borderColor: "border-cyan-500/50",
         glow: "shadow-cyan-500/20",
@@ -308,7 +517,7 @@ export default function FunnelPage({
       },
       { 
         name: "3. Submitted Proposals / Tender", 
-        statuses: ["Submitted", "Re-Tender[Revised Price", "Opportunity (50%-60 %)"], 
+        statuses: ["Submitted", "Re-Tender[Revised Price", "Opportunity (50%-60 %)", "Negotiation"], 
         color: "from-amber-500/80 to-amber-900/40", 
         borderColor: "border-amber-400/50",
         glow: "shadow-amber-500/20",
@@ -318,7 +527,7 @@ export default function FunnelPage({
       },
       { 
         name: "4. Committed / Decision Call", 
-        statuses: ["Commit", "Challenge"], 
+        statuses: ["Commit", "Challenge", "PO Expected", "PO Received"], 
         color: "from-purple-600/80 to-purple-900/40", 
         borderColor: "border-purple-500/50",
         glow: "shadow-purple-500/20",
@@ -328,7 +537,7 @@ export default function FunnelPage({
       },
       { 
         name: "5. Closed - Won / Achieved", 
-        statuses: ["Achieved"], 
+        statuses: ["Achieved", "Renewed"], 
         color: "from-emerald-600/80 to-emerald-900/40", 
         borderColor: "border-emerald-500/50",
         glow: "shadow-emerald-500/20",
@@ -448,16 +657,22 @@ export default function FunnelPage({
     switch (st) {
       case "Achieved":
       case "Strategic Account":
+      case "PO Received":
+      case "Renewed":
         return `${base} bg-emerald-500/10 text-emerald-400 border-emerald-500/20`;
       case "Commit":
+      case "PO Expected":
         return `${base} bg-teal-500/10 text-teal-300 border-teal-500/20`;
       case "Opportunity (50%-60 %)":
       case "Ongoing":
+      case "Negotiation":
         return `${base} bg-indigo-500/10 text-indigo-300 border-indigo-500/20`;
       case "Submitted":
       case "New":
+      case "Customer Contacted":
         return `${base} bg-blue-500/10 text-blue-300 border-blue-500/20`;
       case "Re-Tender[Revised Price":
+      case "Quotation Sent":
         return `${base} bg-yellow-500/10 text-yellow-300 border-yellow-500/20`;
       case "Challenge":
         return `${base} bg-amber-500/10 text-amber-300 border-amber-500/20`;
@@ -512,11 +727,12 @@ export default function FunnelPage({
             </button>
             
             <button
-              onClick={handleExportExcel}
+              onClick={handleUnifiedExport}
               disabled={filteredRecords.length === 0}
-              className="flex items-center justify-center gap-2 px-6 py-3.5 text-xs font-black rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-100 transition-all disabled:opacity-50 uppercase tracking-widest backdrop-blur-sm whitespace-nowrap"
+              className="flex items-center justify-center gap-2 px-6 py-3.5 text-xs font-black rounded-xl border border-emerald-700/50 bg-emerald-900/20 hover:bg-emerald-900/40 text-emerald-100 transition-all disabled:opacity-50 uppercase tracking-widest backdrop-blur-sm whitespace-nowrap shadow-[0_0_15px_rgba(16,185,129,0.1)]"
+              title="Export Full Funnel and Brand-wise sheets into a single Excel file"
             >
-              <FileSpreadsheet size={18} className="text-emerald-400" /> Export Excel
+              <FileSpreadsheet size={18} className="text-emerald-400" /> Export Data
             </button>
           </div>
         </div>
@@ -528,18 +744,36 @@ export default function FunnelPage({
       <div className={`p-5 rounded-xl border ${theme.bgCard} ${theme.border} ${theme.cardShadow} bg-slate-900/60 backdrop-blur-xl sticky top-0 z-30 shadow-2xl transition-all duration-300`}>
         <div className="space-y-4">
           {/* Main Search Engine */}
-          <div className="w-full relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={20} />
-            <input 
-              type="text" 
-              placeholder="Search Partners, Brands, or KAMs..."
-              className="w-full bg-black/40 border border-slate-800 focus:border-indigo-500/50 rounded-xl pl-12 pr-4 py-3 text-[13px] text-white placeholder:text-slate-600 focus:outline-none transition-all font-mono"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
+          <div className="flex flex-col lg:flex-row gap-4 items-center">
+            <div className="w-full relative group flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={20} />
+              <input 
+                type="text" 
+                placeholder="Search Partners, Brands, or KAMs..."
+                className="w-full bg-black/40 border border-slate-800 focus:border-indigo-500/50 rounded-xl pl-12 pr-4 py-3 text-[13px] text-white placeholder:text-slate-600 focus:outline-none transition-all font-mono"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
+            
+            <button
+              onClick={() => {
+                setShowSoftwareRenewals(prev => !prev);
                 setCurrentPage(1);
               }}
-            />
+              className={`flex items-center justify-center gap-2 px-5 py-3 text-xs font-mono font-bold rounded-xl border transition-all cursor-pointer whitespace-nowrap w-full lg:w-auto ${
+                showSoftwareRenewals 
+                  ? "bg-fuchsia-950/40 border-fuchsia-500/40 text-fuchsia-300 hover:bg-fuchsia-900/40 shadow-[0_0_15px_rgba(217,70,239,0.1)]" 
+                  : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
+              }`}
+              title="Include upcoming renewals from Software Business module as scopes"
+            >
+              <Activity size={14} className={showSoftwareRenewals ? "animate-pulse text-fuchsia-400" : ""} />
+              {showSoftwareRenewals ? "⚡ Software Renewals: Linked" : "🔌 Software Renewals: Unlinked"}
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-center">
@@ -845,10 +1079,12 @@ export default function FunnelPage({
                 <tr className="bg-gradient-to-r from-indigo-950/20 via-transparent to-indigo-950/20">
                   {visibleColumns.sl && <th className="py-3 px-3 font-black text-indigo-500 border-b-2 border-indigo-500/30">SL</th>}
                   {visibleColumns.partner && <th className="py-3 px-3 font-black border-b-2 border-slate-800/50">Partner</th>}
+                  {visibleColumns.salesman && <th className="py-3 px-3 font-black border-b-2 border-slate-800/50">Salesman</th>}
+                  {visibleColumns.quarter && <th className="py-3 px-3 font-black border-b-2 border-slate-800/50">Quarter</th>}
+                  {visibleColumns.startDate && <th className="py-3 px-3 font-black border-b-2 border-slate-800/50">Start Date</th>}
+                  {visibleColumns.endDate && <th className="py-3 px-3 font-black border-b-2 border-slate-800/50">End Date</th>}
                   {visibleColumns.brand && <th className="py-3 px-3 font-black border-b-2 border-slate-800/50">Brand</th>}
                   {visibleColumns.amount && <th className="py-3 px-3 font-black text-right text-emerald-500 border-b-2 border-emerald-500/20">Amount</th>}
-                  {visibleColumns.kam && <th className="py-3 px-3 font-black border-b-2 border-slate-800/50">KAM</th>}
-                  {visibleColumns.timeline && <th className="py-3 px-3 font-black border-b-2 border-slate-800/50">Timeline</th>}
                   {visibleColumns.status && <th className="py-3 px-3 font-black text-center text-amber-500 border-b-2 border-amber-500/20">Status</th>}
                   {visibleColumns.actions && <th className="py-3 px-3 font-black text-right border-b-2 border-slate-800/50">Actions</th>}
                 </tr>
@@ -865,7 +1101,32 @@ export default function FunnelPage({
                       <td className="py-2 px-2">
                         <div className="font-bold text-slate-100 uppercase text-[11px] whitespace-nowrap">
                           {rec.partner}
+                          {rec.isSoftwareRenewal && (
+                            <span className="ml-1.5 px-1.5 py-0.5 text-[8px] font-bold bg-fuchsia-950/60 text-fuchsia-300 rounded border border-fuchsia-800/30">
+                              Software Renewal
+                            </span>
+                          )}
                         </div>
+                      </td>
+                    )}
+                    {visibleColumns.salesman && (
+                      <td className="py-2 px-2 text-slate-200 text-[11px] whitespace-nowrap">
+                        {rec.salesman}
+                      </td>
+                    )}
+                    {visibleColumns.quarter && (
+                      <td className="py-2 px-2 text-slate-300 font-semibold whitespace-nowrap">
+                        {rec.quarter}
+                      </td>
+                    )}
+                    {visibleColumns.startDate && (
+                      <td className="py-2 px-2 text-slate-400 font-mono text-[10px] whitespace-nowrap">
+                        {rec.startDate || "-"}
+                      </td>
+                    )}
+                    {visibleColumns.endDate && (
+                      <td className="py-2 px-2 text-slate-400 font-mono text-[10px] whitespace-nowrap">
+                        {rec.endDate || "-"}
                       </td>
                     )}
                     {visibleColumns.brand && (
@@ -887,22 +1148,12 @@ export default function FunnelPage({
                       </td>
                     )}
                     {visibleColumns.amount && (
-                      <td className="py-2 px-2 font-bold text-indigo-300 text-[11px] text-right">
+                      <td className="py-2 px-2 font-bold text-indigo-300 text-[11px] text-right whitespace-nowrap">
                         {formatBDT(rec.amount)}
                       </td>
                     )}
-                    {visibleColumns.kam && (
-                      <td className="py-2 px-2 text-slate-200 text-[11px] whitespace-nowrap">
-                        {rec.salesman}
-                      </td>
-                    )}
-                    {visibleColumns.timeline && (
-                      <td className="py-2 px-2 text-slate-400 font-mono text-[10px]">
-                        <div className="text-white font-semibold">{rec.quarter}</div>
-                      </td>
-                    )}
                     {visibleColumns.status && (
-                      <td className="py-2 px-2 text-center">
+                      <td className="py-2 px-2 text-center whitespace-nowrap">
                         <span className={getStatusBadgeClass(rec.status)}>
                           {rec.status}
                         </span>
@@ -911,24 +1162,30 @@ export default function FunnelPage({
                     {visibleColumns.actions && (
                       <td className="py-2 px-2 text-right">
                         <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => openEditModal(rec)}
-                            className="p-1 px-1.5 rounded border border-slate-700 hover:border-indigo-500 hover:text-indigo-400 cursor-pointer"
-                            title="Modify Record"
-                          >
-                            <Edit3 size={12} />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm(`Remove pipeline deal with ${rec.partner}?`)) {
-                                handleDelete(rec.id);
-                              }
-                            }}
-                            className="p-1 px-1.5 rounded border border-slate-700 hover:border-red-500 hover:text-red-400 cursor-pointer"
-                            title="Delete Record"
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                          {!rec.isSoftwareRenewal ? (
+                            <>
+                              <button
+                                onClick={() => openEditModal(rec)}
+                                className="p-1 px-1.5 rounded border border-slate-700 hover:border-indigo-500 hover:text-indigo-400 cursor-pointer"
+                                title="Modify Record"
+                              >
+                                <Edit3 size={12} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Remove pipeline deal with ${rec.partner}?`)) {
+                                    handleDelete(rec.id);
+                                  }
+                                }}
+                                className="p-1 px-1.5 rounded border border-slate-700 hover:border-red-500 hover:text-red-400 cursor-pointer"
+                                title="Delete Record"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[10px] text-slate-500 italic font-mono pr-2" title="Managed under Software Business Module">Linked</span>
+                          )}
                         </div>
                       </td>
                     )}
@@ -1292,29 +1549,43 @@ export default function FunnelPage({
                   Visible Columns
                 </label>
                 <div className="grid grid-cols-2 gap-3">
-                  {Object.keys(visibleColumns).map((col) => (
-                    <label key={col} className="flex items-center gap-3 group cursor-pointer">
-                      <div className="relative flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={(visibleColumns as any)[col]}
-                          onChange={() => {
-                            setVisibleColumns(prev => ({
-                              ...prev,
-                              [col]: !(prev as any)[col]
-                            }));
-                          }}
-                          className="peer h-4 w-4 opacity-0 absolute cursor-pointer"
-                        />
-                        <div className="h-4 w-4 border border-slate-700 rounded bg-[#111827] peer-checked:bg-emerald-600 peer-checked:border-emerald-500 transition-all flex items-center justify-center">
-                          <div className="w-1.5 h-1.5 bg-white rounded-full opacity-0 peer-checked:opacity-100 transition-opacity" />
+                  {Object.keys(visibleColumns).map((col) => {
+                    const labels: Record<string, string> = {
+                      sl: "Serial (SL)",
+                      partner: "Partner",
+                      salesman: "Salesman",
+                      quarter: "Quarter",
+                      startDate: "Start Date",
+                      endDate: "End Date",
+                      brand: "Brand",
+                      amount: "Amount",
+                      status: "Status",
+                      actions: "Actions"
+                    };
+                    return (
+                      <label key={col} className="flex items-center gap-3 group cursor-pointer">
+                        <div className="relative flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={(visibleColumns as any)[col]}
+                            onChange={() => {
+                              setVisibleColumns(prev => ({
+                                ...prev,
+                                [col]: !(prev as any)[col]
+                              }));
+                            }}
+                            className="peer h-4 w-4 opacity-0 absolute cursor-pointer"
+                          />
+                          <div className="h-4 w-4 border border-slate-700 rounded bg-[#111827] peer-checked:bg-emerald-600 peer-checked:border-emerald-500 transition-all flex items-center justify-center">
+                            <div className="w-1.5 h-1.5 bg-white rounded-full opacity-0 peer-checked:opacity-100 transition-opacity" />
+                          </div>
                         </div>
-                      </div>
-                      <span className="text-[11px] font-mono text-slate-400 group-hover:text-slate-200 uppercase transition-colors">
-                        {col === 'sl' ? 'Serial (SL)' : col}
-                      </span>
-                    </label>
-                  ))}
+                        <span className="text-[11px] font-mono text-slate-400 group-hover:text-slate-200 uppercase transition-colors">
+                          {labels[col] || col}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             </div>

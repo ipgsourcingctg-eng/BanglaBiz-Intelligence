@@ -817,7 +817,7 @@ export default function SoftwareBusinessPage({ theme, filters }: SoftwareBusines
         title = "Salesperson_Productivity_Report";
         csvContent += "KAM Sales Owner,Total Managed Contracts,Cumulative Portfolio Value BDT\n";
         csvContent += '"Mahbub Alam",5,"৳ 19,800,000"\n';
-        csvContent += '"M. A. Rahman",4,"৳ 22,400,000"\n';
+        csvContent += '"Md. Mahbub Alam",4,"৳ 22,400,000"\n';
         csvContent += '"Tarikul Islam",3,"৳ 15,900,000"\n';
       }
 
@@ -1456,8 +1456,7 @@ export default function SoftwareBusinessPage({ theme, filters }: SoftwareBusines
                       theme.isDark ? "bg-slate-900 border-slate-800 text-slate-350" : "bg-white border-slate-200"
                     }`}
                   >
-                    <option value="Mahbub Alam">Mahbub Alam</option>
-                    <option value="M. A. Rahman">M. A. Rahman</option>
+                    <option value="Md. Mahbub Alam">Md. Mahbub Alam</option>
                     <option value="Tarikul Islam">Tarikul Islam</option>
                     <option value="Farhana Yasmin">Farhana Yasmin</option>
                   </select>

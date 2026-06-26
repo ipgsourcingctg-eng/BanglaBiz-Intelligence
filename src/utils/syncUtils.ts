@@ -411,6 +411,17 @@ export const syncGoogleSheets = async (
           remarksParts.push(`Other Info: ${otherInfo}`);
         }
 
+        let salesOwner = "Md. Mahbub Alam";
+        const rawSalesOwner = String(findVal(["Sales Owner", "Owner", "Salesman", "KAM"], "Md. Mahbub Alam")).trim();
+        const upperOwner = rawSalesOwner.toUpperCase();
+        if (upperOwner === "M. A. RAHMAN" || upperOwner === "M A RAHMAN") {
+          salesOwner = "Md. Mahbub Alam";
+        } else if (rawSalesOwner && rawSalesOwner !== "Md. Mahbub Alam") {
+          // If a specific owner is provided in the sheet (other than Rahman/Mahbub), we keep it,
+          // but if it's the legacy Rahman name, we map it to Mahbub Alam.
+          salesOwner = rawSalesOwner;
+        }
+
         return {
           id: `sub-gs-${idx}-${Date.now()}`,
           account_name: accountName,
@@ -430,7 +441,7 @@ export const syncGoogleSheets = async (
           renewal_stage: renewalStage,
           renewal_probability: prob,
           status: status,
-          sales_owner: "M. A. Rahman",
+          sales_owner: salesOwner,
           competitor: "",
           remarks: remarksParts.join(" | ") || "Imported contract config details fully matched",
           created_at: new Date().toISOString(),
